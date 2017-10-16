@@ -1,0 +1,426 @@
+SQL>set line 200;
+
+ 
+
+SQL>col 컬럼명 format a글자수     // 문자열 길이 변경시
+
+ex) em01 컬럼의 길이를 20자만큼 보이도록 하기
+
+-> SQL>col em01 format a20;
+
+ 
+
+SQL> column 컬럼명 format(양식, 또는 글자 수)    // 숫자의 표현 방법 바꾸기
+
+ex) sal 컬럼을 3자리마다 ,를 찍게 하기
+
+-> SQL>col sal format 999,999;     
+
+ex) sal 컬럼을 10자리 까지 보이게 하기
+
+-> SQL>col sal format 9999999999;
+
+
+SQL> col ename format a30
+SQL> col ename-
+> format a30
+SQL> show under
+underline "-" (hex 2d)
+SQL> set underline ^
+
+select *
+from emp e, emp a
+
+select e.empno, e.sal, a.empno, a.sal e.sal -a.sal
+from emp e, emp a
+where a. empno = 7499;
+and e.sal >a.sal;
+
+select e.empno,
+	e.sal, 
+	a.empno, 
+	a.sal,
+	e.sal -a.sal as diff
+from emp e, emp a
+where a. empno = 7499
+and e.sal > a.sal
+order by diff desc;
+
+select ename, lower(ename)
+from emp;
+
+select avg(sal)
+from emp;
+
+select sum(sal), avg(sal)
+from emp;
+
+select deptno, sum(sal), avg(sal)
+from emp
+group by deptno
+order by deptno;
+
+select deptno, job, sum(sal), avg(sal)
+from emp
+group by deptno, job
+order by deptno;
+
+
+
+select 	case	when sal <2000 then '1 : <2000 '
+		when sal <4000 then '2 : <4000 ' 
+		else		 '3 : >=4000'	
+	end as gubun,
+	count(*),
+	sum(sal),
+	avg(sal)
+from emp
+group by case	when sal <2000 then '1 : <2000 '
+		when sal <4000 then '2 : <4000'
+		else		 '3 : >=4000'
+	end
+order by gubun;
+
+select deptno, job, sum(sal), avg(sal)
+from emp
+group by deptno,job
+order by deptno, job;
+
+select /*가공한 결과에 의한 group by */
+to_char(hiredate, 'yyyy') as year, avg(sal)
+from emp
+group by to_char(hiredate, 'yyyy')
+order by year;
+
+#에러 대처
+ -복수행 함수로 감싼 컬럼 이외의 모든컬럼은 
+ group by절에 나타나야한다.
+
+select deptno, empno, ename, sal, avg(sal)
+from emp
+group by deptno;
+
+select deptno
+from emp
+group by deptno;
+
+select deptno, sum(sal)
+from emp
+group by deptno, job;
+
+select deptno, sum(sal)
+from emp
+where deptno !=20
+group by deptno, job;
+
+select deptno, sum(sal)
+from emp
+group by deptno
+having deptno !=20;
+
+select deptno, sum(sal)
+from emp
+where sum(sal) < 10000 /에러
+group by deptno;
+
+
+select deptno, sum(sal)
+from emp
+group by deptno
+having sum(sal)<10000;
+
+select avg(all sal), avg(distinct sal)
+from emp;
+
+-모든 복수행함수는 null을 무시합니다. 단,count(*)는 예외
+
+select sum(comm),avg(comm)
+from emp;
+
+select comm, nvl (comm,0)
+from emp;
+
+select avg(comm),
+	avg(nvl(comm,0))
+from emp;
+
+
+
+
+drop table t1 purge;
+create table t1 (col1 number);
+
+insert into t1 values(1000);
+insert into t1 values(1000);
+insert into t1 values(2000);
+insert into t1 values(2000);
+insert into t1 values(null);
+insert into t1 values('');
+
+commit;
+
+
+select * from t1;
+select count(*), count(col1),count(distinct col1)
+from t1;
+
+SELECT department_id, MAX(salary)
+FROM employees
+GROUP BY department_id
+HAVING MAX(salary)>10000 ;
+
+
+SELECT job_id, SUM(salary) PAYROLL
+FROM employees
+WHERE job_id NOT LIKE '%REP%'
+GROUP BY job_id
+HAVING SUM(salary) > 13000
+ORDER BY SUM(salary);
+
+
+select max(AVG(salary))
+from employees
+group by department_id
+
+
+SQL> select department_id,department_name,location_id
+  2  from departments
+  3  where location_id=1700;
+
+SQL> select max(AVG(salary))
+  2  from employees
+  3  group by department_id;
+
+연습문제 2
+select department_id, count(*)
+from employees
+group by department_id
+order by 1;
+
+연습문제 3
+select department_id, count(*)
+from employees
+group by department_id
+order by 1;
+
+연습문제 4
+select department_id as no, sum(salary) as pay
+from employees
+where department_id in (10 , 20, 90)
+group by department_id
+order by 1;
+
+연습문제 5 
+select manager_id, count(*)
+from employees
+group by manager_id
+having count(*)>=0
+order by count(*) desc;
+
+select job_id work, avg(salary) avgpay, sum(salary) pay
+from employees
+where salary between 5000 and 20000
+group by job_id
+having sum(salary) >= 15000
+order by avg(salary)desc;
+
+
+select job_id work,avg(sal) as avsal, sum(sal) as pay
+from employees
+where salary between 5000 and 20000
+group by job_id
+having sum(sal) >= 15000
+order by avg(sal)desc;
+
+
+
+select job,
+max(hiredate),
+min(hiredate)
+from emp
+group by job
+order by job;
+
+col user format a10
+select sysdate, user, initcap(ename) a, substr(ename, 1, 2) b, ename ,
+from emp;
+
+
+select substr(empno , 1, 2)||'****' as empno
+from emp;
+
+
+SELECT employee_id, last_name, department_id
+FROM employees
+WHERE LOWER(last_name) = 'higgins';
+
+문제 이름이 5글자인사원
+select empno, ename, job
+from emp
+where ename like '-----';
+
+select empno, ename, job
+from emp
+where length(ename) = 5;
+
+
+문제 ename에 'A'가 포함된 사원
+
+select empno, ename, instr(ename, 'A'),job
+from emp
+where instr(ename,'A') >=1;
+
+문제,SAL을 그래프로 나타내세요.
+ *하나가 100입니다. 반올림하세요.
+
+select empno, sal, round(sal/100)
+from emp;
+
+col stars format a70
+
+select empno, sal,rpad(' ', round(sal/100)) as stars
+from emp;
+
+select empno, sal, rpad('*', round(sal/100),'*') as stars
+from emp;
+
+문제. trim과 ltrim, rtrim을 비교하세요.
+
+select ltrim('SOS','S') from dual;
+select trim(leading 'S' from 'SOS') from dual;
+
+select ltrim('SOS','S') from dual;
+select trim(trailing 'S' from 'SOS') from dual;
+
+select ltrim(rtrim('SOS','S'),'S') from dual;
+select trim(both 'S' from 'SOS') from dual;
+
+select ltrim('xyxYxyxy') from dual;
+select trim('xy' from 'xyxYxyxy') from dual;
+
+
+
+
+
+
+drop table t1 purge;
+create table t1 (col1 varchar2(10));
+
+insert into t1 values('37236');
+insert into t1 values('A747');
+insert into t1 values('788D1');
+insert into t1 values('53');
+insert into t1 values('68348');
+
+commit;
+
+
+
+select col1, lower(col1), upper(col1)
+from t1
+where lower(col1)= upper(col1);
+
+select col1, ltrim(col1,'0123456789')
+from t1;
+
+select col1, ltrim(col1,'0123456789')
+from t1
+where ltrim(col1)=upper(col1);
+
+
+select ename, substr
+
+
+
+
+
+create or replace function tax (a number)
+is
+begin
+return a*0, 137;
+end;
+/
+
+select empno, sal, tax(sal) as tax
+from emp;
+
+
+
+select ltrim('the lion','the') from dual;
+select ltrim('lion the','the') from dual;
+select ltrim('lion',' ') from dual;
+
+
+
+select round(45.995, 2),
+	round(45.995, -2)
+	round(654645.995, -2)
+from dual;
+
+select empno, mod(empno, 2),mod(empno, 3),mod(empno, 5)
+from emp;
+
+
+select ceil(3.14),
+	floor(3.14)
+from dual;
+
+select sysdate,
+	sysdate+3,
+	sysdate+3/24,
+	sysdate+12/(24*60),
+	sysdate+36/(24*60*60)
+from dual;
+
+select sysdate,
+	sysdate+100,
+	sysdate+1000,
+	sysdate+10000
+from dual;
+
+select sysdate - to_date('19920611','YYYYMMDD')
+from dual;
+
+
+select next_day(to_date('06-feb-17',DD-MON-RR))
+from dual;
+
+select round(to_date('17-AUG-17','DD-MON-YYYY'),'year')
+from dual;
+
+
+select round(to_date('16-AUG-17','DD-MON-YYYY'),'month')
+from dual;
+
+select empno, hiredate, 
+	trunc(hiredate, 'month'),
+	trunc(hiredate, 'year')
+from emp;
+
+
+select '455674',to_number('455674')
+from dual;
+
+
+select hiredate, to_char(hiredate,'YYYY YYYY YYYY') from emp;
+
+select hiredate, to_char(hiredate,'Year Month mon Day dy') from emp;
+
+select hiredate, to_char(hiredate,'Year Month mon Day dy') from emp;
+
+select hiredate, to_char(hiredate,'hh24:mi:ss') from emp;
+
+select to_char(sysdate,'ssss')from dual;
+
+
+SELECT last_name,
+TO_CHAR(hire_date, 'DD Month YYYY')
+AS HIREDATE
+FROM employees;
+
+
+SELECT last_name,
+TO_CHAR(hire_date,
+'fmDdspth "of" Month YYYY fmHH:MI:SS AM')
+HIREDATE
+FROM employees;

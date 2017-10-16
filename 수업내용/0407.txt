@@ -1,0 +1,14 @@
+oracle/oracle
+
+
+os] cd /home/oracle/abc
+os]rm -rf * 
+os]rm -rf /home/oracle/abc
+
+lp 프린트
+
+윈도우+m 바탕화면보기
+윈도우+e 파일탐색기
+
+set sqlprompt :&_USER@&_CONNECT_IDENT //sql이름바꾸기
+

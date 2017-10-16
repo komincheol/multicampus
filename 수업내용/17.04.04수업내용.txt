@@ -1,0 +1,317 @@
+
+# 용어
+
+  - Data vs Information
+  - Database
+  - DBMS
+
+  - 관계형데이터베이스(SQL Database) = Table(자료구조) + SQL(입출력명령)
+
+# 실습 환경 설정
+
+  1.Instant Client 다운로드 및 설정
+
+    - http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html
+
+    C:\Users\student> notepad ic.bat
+
+    set path=C:\instantclient_12_1;%path%
+     sqlplus dream01/catcher@70.12.50.50:1521/XE
+
+    C:\Users\student> ic
+
+    SQL> show user
+    USER is "DREAM01" 
+
+    SQL> select * from tab;
+
+    SQL> ed r.sql
+
+    select no as you
+    from (select level as no
+          from dual
+          connect by level <= 24
+          order by dbms_random.value)
+    where rownum = 1;
+
+    SQL> @r
+
+  2.실습용 테이블 생성
+
+    - http://cafe.naver.com/n1books/11 포스트에 첨부된 creobjects.sql, demobld.sql 다운로드
+
+    C:\Users\student> ic
+
+    SQL> @C:\Users\student\Desktop\creobjects.sql   -- EMPLOYEES 등 생성
+    SQL> @C:\Users\student\Desktop\demobld.sql      -- EMP 등 생성
+
+    C:\Users\student> ic
+
+    SQL> select * from tab;
+    SQL> select * from dept;
+
+    SQL> show all
+
+    linesize 80
+    pagesize 14
+
+    SQL> select * from emp;
+
+    SQL> set linesize 200 
+    SQL> set pagesize 40
+
+    SQL> list     -- 또는 l
+
+    SQL> run
+    SQL> r
+    SQL> /
+
+# SQL
+
+  https://en.wikipedia.org/wiki/SQL#Queries
+
+# SQL 분류
+
+  - DDL : CREATE, ALTER, DROP, RENAME, TRUCATE, COMMENT
+  - DML : INSERT, UPDATE, DELETE, MERGE, SELECT
+  - TCL : COMMIT, ROLLBACK, SAVEPOINT
+  - DCL : GRANT, REVOKE
+
+# SELECT 이해
+
+  - 검색, 조회, 질의, ...
+  - Queries allow the user to describe desired data.
+
+  select empno, ename, sal, job
+  from emp;
+
+  select sal, sal, sal, sal    -- 컬럼 복제
+  from emp;
+
+  select sum(sal), avg(sal), max(sal), min(sal)
+  from emp;
+
+  select empno, ename, sal, sal*1.3
+  from emp;
+
+# SELECT Statement
+  
+  * SELECT 문장을 작성하거나 해석할 때 권장 순서 (절대 실행순서 아님)
+
+  SELECT   deptno, sum(sal)  -- 4 (mandatory)
+  FROM     emp               -- 1 (mandatory)
+  WHERE    sal >= 1000       -- 2
+  GROUP BY deptno            -- 3 
+  HAVING   sum(sal) >= 2000  -- 5
+  ORDER BY deptno            -- 6
+  ;
+
+# Where절 이해
+
+  * candidate row를 검증해서 T, F, N 가운데 하나를 리턴하는 절인데
+    where절이 T를 리턴해야 후보행(candidate row)이 리턴된다.
+
+  select * from emp where sal >= 1500;
+  select * from emp where sal >= 1500 and job = 'SALESMAN';
+
+  select * from emp where comm = null;   -- 엉터리
+  select * from emp where comm is null;  -- 제대로
+
+  select ename, lower(ename), sal, sal * 1.2
+  from emp
+  where sal >= 1000;
+
+# Join
+
+  * 용어
+
+    select *
+    from emp e, dept d            -- Join Statement
+    where e.deptno = d.deptno     -- Join Predicate
+    and e.sal >= 1000             -- Non-Join Predicate
+    and e.job = 'MANAGER'         -- Non-Join Predicate
+    and d.deptno = 10             -- Non-Join Predicate(Single-Row Predicate)
+    order by 1;
+
+  * Syntax
+
+    [1] Oracle Syntax 
+
+        - Equi join
+        - NonEqui join
+        - Self join
+        - Outer join
+
+    [2] SQL:1999 Syntax
+
+        - Cross join
+        - Natural join
+        - Join Using
+        - Join On
+        - Outer join
+
+  * 조인은 곱셈 연산이다!
+
+    select count(*)
+    from (select level as no from dual connect by level <= 100),
+         (select level as no from dual connect by level <= 100),
+         (select level as no from dual connect by level <= 100);
+
+# Join >> Oracle Syntax 
+
+ (1) Equi join
+
+  select *
+  from emp, dept
+  order by 1;
+
+  select *
+  from emp e, dept d
+  where e.deptno = d.deptno
+  order by 1;
+
+ (2) NonEqui join
+
+  select *
+  from emp, salgrade
+  order by 1;
+
+  select *
+  from emp e, salgrade s
+  where e.sal >= s.losal and e.sal <= s.hisal
+  order by 1;
+
+  select s.grade, count(*), avg(e.sal)
+  from emp e, salgrade s
+  where e.sal >= s.losal and e.sal <= s.hisal
+  group by s.grade
+  order by grade desc;
+
+ (3) Self join
+  
+  select *
+  from emp w, emp m
+  order by 1;
+
+  select *
+  from emp w, emp m
+  where w.mgr = m.empno
+  order by 1;
+
+  select w.empno, w.ename, m.empno, m.ename
+  from emp w, emp m
+  where w.mgr = m.empno
+  order by 1;
+
+  cf.상호 관련 서브쿼리로 해결
+
+     select empno, ename, mgr, (select ename from emp where empno = e.mgr) as ename
+     from emp e; 
+
+ (4) Outer join
+
+  select *
+  from emp w, emp m
+  where w.mgr = m.empno (+)
+  order by 1;
+
+# 문제.누적합 구하기
+
+         A          B      누적
+  -------- ---------- ---------
+      7369        800       800
+      7499       1600      2400
+      7521       1250      3650
+
+  drop table t1;
+
+  create table t1 
+  as 
+  select empno c1, sal c2
+  from emp
+  where rownum <= 3;
+
+  select *
+  from t1;
+
+  select *
+  from t1 a, t1 b;
+
+  select *
+  from t1 a, t1 b
+  where a.c1 >= b.c1
+  order by 1, 2;
+
+  select a.c1, a.c2, sum(b.c2) as cumulative
+  from t1 a, t1 b
+  where a.c1 >= b.c1
+  group by a.c1, a.c2
+  order by 1, 2;
+
+# Cartesian Product는 항상 나쁘다??!!
+
+  select deptno, job, sum(sal)
+  from emp
+  group by deptno, job
+  union all
+  select deptno, null, sum(sal)
+  from emp
+  group by deptno
+  union all
+  select null, null, sum(sal)
+  from emp
+  order by 1, 2;
+
+     ---
+
+  select *
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         job, 
+         sum_sal,
+         no
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         decode(n.no, 1, job) as job,
+         sum_sal,
+         no
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         decode(n.no, 1, job) as job,
+         sum(sum_sal)
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  group by decode(n.no, 1, deptno, 2, deptno),
+           decode(n.no, 1, job)
+  order by 1, 2;
+
+     ---
+
+  select deptno, job, sum(sal)
+  from emp
+  group by rollup(deptno, job);

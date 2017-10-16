@@ -1,0 +1,19 @@
+[orcl:~]$ . oraenv
+          +ASM
+[+ASM:~]$ lsnrctl start //listener 살리기!! 이름을 뒤에 줄 수도 있다.
+[+ASM:~]$ lsnrctl start listener1
+[+ASM:~]$ sqlplus / as sysasm
+SQL> startup
+SQL> exit
+[+ASM:~] . oraenv
+[+ASM:~] orcl
+[orcl:~]$ emctl start dbconsole
+[orcl:~]$ sqlplus / as sysdba
+SQL> startup
+SQL> exit
+[orcl:~]$ . oraenv
+[orcl:~]$ prod
+- prod db_console 살리고 server startup
+
+
+cd $ORACLE_HOME/dbhome_1/dbs

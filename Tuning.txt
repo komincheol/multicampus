@@ -1,0 +1,175 @@
+
+# Autotrace 기능 설정
+
+  [orcl:~]$ . oraenv
+  ORACLE_SID = [orcl] ? orcl
+
+  [orcl:~]$ sqlplus / as sysdba
+  SQL> startup force
+
+  SQL> get ?/sqlplus/admin/plustrce.sql
+  SQL> sta ?/sqlplus/admin/plustrce.sql
+
+  SQL> grant plustrace
+       to public;
+
+  SQL> alter user scott 
+       identified by tiger
+       account unlock;
+
+  SQL> alter user sh
+       identified by sh
+       account unlock;
+
+# Scott 유저로 확인
+
+  SQL> conn scott/tiger
+
+  SQL> set timing on
+  SQL> set autotrace on
+
+  SQL> select * 
+       from emp
+       where empno = 7788;
+
+# SH 유저로 확인
+
+  SQL> conn sh/sh
+
+  SQL> set timing on
+  SQL> set autotrace on
+
+  SQL> select CUST_FIRST_NAME, 
+              CUST_LAST_NAME 
+       from customers 
+       where CUST_FIRST_NAME like 'K%';
+
+       1470  consistent gets
+
+  SQL> save t001.sql
+
+  SQL> select count(*) 
+       from customers;
+
+  SQL> desc user_indexes
+
+  SQL> ed ind.sql
+
+       select table_name,
+              index_name
+       from user_indexes
+       where table_name = '&1';
+
+  SQL> @ind CUSTOMERS
+
+  SQL> create index cust_first_name_idx
+       on customers(cust_first_name);
+
+  SQL> @t001
+
+       127  consistent gets
+
+  SQL> select /*+ full(c) */
+              CUST_FIRST_NAME, 
+              CUST_LAST_NAME 
+       from customers c
+       where CUST_FIRST_NAME like 'K%';
+
+# 조인 문장 테스트
+
+  SQL> select count(*) 
+       from sales;
+
+  SQL> select c.CUST_FIRST_NAME, 
+              c.CUST_LAST_NAME,
+              s.quantity_sold,
+              s.amount_sold
+       from sales s, customers c
+       where s.cust_id = c.cust_id
+       and   c.CUST_FIRST_NAME like 'K%';
+
+       1944  consistent gets
+
+  SQL> save t002.sql
+
+  SQL> @ind SALES
+
+  SQL> create index sales_cust_id_idx
+       on sales(cust_id);
+
+       => 에러 발생 : ORA-01408: 열 목록에는 이미 인덱스가 작성되어 있습니다
+
+  SQL> create index sales_cust_id_idx
+       on sales(cust_id, quantity_sold, amount_sold);
+
+  SQL> @t002
+
+       => 실행 계획에 변화가 없을 수 있습니다.
+
+  SQL> alter session set optimizer_mode = first_rows_1;
+  SQL> @t002
+
+        418  consistent gets
+
+------------------------------------------------------------
+| Id  | Operation                    | Name                |
+------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                     |
+|   1 |  NESTED LOOPS                |                     |
+|   2 |   TABLE ACCESS BY INDEX ROWID| CUSTOMERS           |
+|*  3 |    INDEX RANGE SCAN          | CUST_FIRST_NAME_IDX |
+|*  4 |   INDEX RANGE SCAN           | SALES_CUST_ID_IDX   |
+------------------------------------------------------------
+
+  SQL> alter session set optimizer_mode = all_rows;
+  SQL> @t002
+
+       1944  consistent gets
+
+------------------------------------------------------------
+| Id  | Operation                    | Name                |
+------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                     |
+|*  1 |  HASH JOIN                   |                     |
+|   2 |   TABLE ACCESS BY INDEX ROWID| CUSTOMERS           |
+|*  3 |    INDEX RANGE SCAN          | CUST_FIRST_NAME_IDX |
+|   4 |   PARTITION RANGE ALL        |                     |
+|   5 |    TABLE ACCESS FULL         | SALES               |
+------------------------------------------------------------
+
+# optimizer statistics 
+
+  SQL> set autotrace off
+
+  SQL> select table_name, NUM_ROWS, BLOCKS, EMPTY_BLOCKS, 
+              AVG_SPACE, CHAIN_CNT, AVG_ROW_LEN
+       from user_tables
+       order by 1;
+
+  SQL> alter session set optimizer_mode = all_rows;
+
+  SQL> exec dbms_stats.delete_schema_stats(user)
+
+  SQL> @t002
+
+       NESTED LOOPS
+
+  SQL> exec dbms_stats.gather_schema_stats(user)
+
+  SQL> @t002
+
+       NESTED LOOPS
+
+  SQL> select /*+ use_hash(s, c) */
+              c.CUST_FIRST_NAME, 
+              c.CUST_LAST_NAME,
+              s.quantity_sold,
+              s.amount_sold
+       from sales s, customers c
+       where s.cust_id = c.cust_id
+       and   c.CUST_FIRST_NAME like 'K%';
+
+
+
+
+

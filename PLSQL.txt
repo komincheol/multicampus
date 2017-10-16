@@ -1,0 +1,2107 @@
+
+============================
+ PL/SQL Fundamentals
+============================
+
+  - program? 해야 할 일을 미리 기술해 놓은 것
+
+  - https://en.wikipedia.org/wiki/SQL#Procedural_extensions
+
+  - PL/SQL = SQL(Data Manipulating) + 3GL(Data Processing)
+  - Pascal -> Ada -> PL/SQL
+
+  - block 구조의 언어
+   
+     -> Anonymous Block 
+     -> Named Block : procedure, function, package, trigger, object, ...
+
+     declare       -- 옵션
+       선언부
+     begin         -- 필수
+       실행부 
+     exception     -- 옵션
+       예외처리부
+     end;          -- 필수
+     /
+
+     create or replace [procedure|function] 이름
+     is
+       선언부
+     begin         -- 필수
+       실행부
+     exception     -- 옵션
+       예외처리부
+     end;          -- 필수
+     /
+
+  - 연산자 비교
+
+                         할당       비교
+
+    c, java              a = 100    a == 100
+    basic, powerscript   a = 100    a = 100
+    pascal, pl/sql       a := 100   a = 100
+
+# 무작정 따라하기
+
+  set serveroutput on
+
+  begin
+    dbms_output.put_line('Hello World!');
+  end;
+  /
+
+  begin
+    for i in 1..100 loop
+      dbms_output.put_line(i);
+    end loop;
+  end;
+  /
+
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(2*i);
+    end loop;
+  end;
+  /
+
+  declare
+    v_avg_sal number;
+  begin
+    select avg(sal) into v_avg_sal
+    from emp 
+    where deptno = &sv_deptno;
+  
+    dbms_output.put_line(v_avg_sal);
+  end;
+  /
+
+  create or replace procedure p1
+  is
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(2*i);
+    end loop;
+  end;
+  /
+
+  show errors
+
+  exec p1
+
+    ------
+
+  SQL> ed src
+
+  set lines 200
+  set pages 100
+  set verify off
+
+  col name format a30
+  col type noprint
+  col text format a70
+  break on name skip page
+
+  select *   
+  from user_source
+  where name like upper('%&1%')
+  order by name, line;
+
+  col name clear
+  col type print
+  col text clear
+  clear break
+
+  set lines 200
+  set pages 40
+  set verify on
+
+  SQL>  src
+
+    ------
+
+  create or replace procedure p1(amu number)
+  is
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(amu*i);
+    end loop;
+  end;
+  /
+
+  show errors
+
+  exec p1(7)
+  exec p1(8)
+
+# 조금 더 따라하기
+
+  create or replace procedure proc1(p_empno number)
+  is
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select ename, sal into v_ename, v_sal
+    from emp
+    where empno = p_empno;
+
+    dbms_output.put_line('ENAME : '||v_ename);
+    dbms_output.put_line('SAL : '||v_sal);
+  end;
+  /
+
+  show errors
+
+  exec proc1(7788)
+  exec proc1(4567)    -- ORA-01403: no data found
+
+  create or replace procedure proc1(p_empno number)
+  is
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select ename, sal into v_ename, v_sal
+    from emp
+    where empno = p_empno;
+
+    dbms_output.put_line('ENAME : '||v_ename);
+    dbms_output.put_line('SAL : '||v_sal);
+  exception
+    when no_data_found then
+      dbms_output.put_line(p_empno||' does not exists!');
+  end;
+  /
+
+  exec proc1(7788)
+  exec proc1(4567)
+
+# 지금은 이해 안되지만 좀 있으면 이해될 내용 참고 따라하기
+
+  ** PL/SQL 블럭에 사용되는 QUERY는 반드시 한건의 ROW만 리턴해야 하며
+     여러 건을 리턴할 경우 에러임. 이를 극복하기 위한 방법이 두가지 있는데
+     명시적 커서를 사용하거나 BULK COLLECT INTO를 사용하면 됨
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    v_empno emp.empno%type;
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select empno, ename, sal INTO v_empno, v_ename, v_sal
+    from emp
+    where job = p_job;
+  end;
+  /
+
+  exec p1('MANAGER')   -- 에러 : ORA-01422: exact fetch returns more than requested number of rows
+
+    ↓↓
+
+  해결방법 1.명시적 커서
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    v_empno emp.empno%type;
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+
+    CURSOR c1 IS
+      select empno, ename, sal
+      from emp
+      where job = p_job;
+  begin
+    OPEN c1;
+
+    loop
+      FETCH c1 INTO v_empno, v_ename, v_sal;
+      exit when c1%notfound;
+      dbms_output.put_line(v_empno||' '||v_ename||' '||v_sal);
+    end loop;
+
+    CLOSE c1;
+  end;
+  /
+
+  exec p1('MANAGER')
+  exec p1('SALESMAN')
+
+    ↓↓
+
+  해결방법 2.BULK COLLECT INTO
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    TYPE emp_record_type IS RECORD 
+      (empno emp.empno%type,
+       ename emp.ename%type,
+       sal   emp.sal%type);
+
+    TYPE emp_record_table_type IS TABLE OF emp_record_type
+      INDEX BY PLS_INTEGER;
+
+    r emp_record_table_type;
+  begin
+    select empno, ename, sal BULK COLLECT INTO r 
+    from emp
+    where job = p_job;
+
+    for i in r.first .. r.last loop
+      dbms_output.put_line(r(i).empno||' '||r(i).ename||' '||r(i).sal);
+    end loop;
+  end;
+  /
+
+  exec p1('MANAGER')
+  exec p1('SALESMAN')
+
+# 트리거 예제
+
+  drop table t1 purge;
+
+  create table t1 (no number, name varchar2(10));
+
+  create or replace trigger t1_name_tri
+  before insert or update of name on t1
+  for each row
+  begin
+    :new.name := upper(:new.name);
+  end;
+  /
+  
+  insert into t1 values(1000, 'abc');
+  insert into t1 values(2000, 'xyz');
+
+  select * from t1;
+
+  create or replace trigger t1_name_tri
+  before insert or update of name on t1
+  for each row
+  begin
+    :new.name := initcap(:new.name);
+  end;
+  /
+
+  update t1 
+  set name = name;
+  
+  insert into t1 values(3000, 'KOREA');
+
+  select * from t1;
+
+===================
+ 0장
+===================  
+
+  create or replace package p
+  is
+    procedure p(a number);
+    procedure p(a varchar2);
+    procedure p(a date);
+  end;
+  /
+
+  create or replace package body p
+  is
+    procedure p(a number)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+
+    procedure p(a varchar2)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+
+    procedure p(a date)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+  end;
+  /
+
+ [1]
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+  
+    p.p(v_sal);
+  end;
+  /
+
+  show errors
+
+  exec p1(7788)
+  exec p1(7900)
+
+ [2]
+
+  create or replace procedure p1(a number)
+  is
+    r emp%rowtype;
+  begin
+    select * into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.sal);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+ [3]
+
+  create or replace procedure p1(a number)
+  is
+    TYPE emp_rec_type IS RECORD 
+     (ename emp.ename%type, 
+      sal   emp.sal%type, 
+      job   emp.job%type);
+
+    r emp_rec_type;
+  begin
+    select ename, sal, job into r 
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.job);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+    ↓↓
+
+  create or replace package pack1
+  is
+    TYPE emp_rec_type IS RECORD 
+     (ename emp.ename%type, 
+      sal   emp.sal%type, 
+      job   emp.job%type);
+  end;
+  /
+
+  create or replace procedure p1(a number)
+  is
+    r pack1.emp_rec_type;
+  begin
+    select ename, sal, job into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.job);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+ [4]
+
+  create or replace procedure p1(a number)
+  is
+    TYPE emp_ename_tab_type IS TABLE OF emp.ename%type
+      INDEX BY PLS_INTEGER;
+
+    t emp_ename_tab_type;
+  begin
+    select ename BULK COLLECT INTO t
+    from emp
+    where deptno = a;
+
+    for i in t.first .. t.last loop
+      p.p(t(i));
+    end loop;
+  end;
+  /
+
+  exec p1(20)
+
+    ↓↓
+
+  create or replace package pack1
+  is
+    TYPE emp_rec_type IS RECORD 
+     (ename emp.ename%type, 
+      sal   emp.sal%type, 
+      job   emp.job%type);
+
+    TYPE emp_ename_tab_type IS TABLE OF emp.ename%type
+      INDEX BY PLS_INTEGER;
+  end;
+  /
+
+  create or replace procedure p1(a number)
+  is
+    t pack1.emp_ename_tab_type;
+  begin
+    select ename BULK COLLECT INTO t
+    from emp
+    where deptno = a;
+
+    for i in t.first .. t.last loop
+      p.p(t(i));
+    end loop;
+  end;
+  /
+
+  exec p1(20)
+
+ [5]
+
+  create or replace procedure p1(b number)
+  is
+    TYPE emp_tab_rec_type IS TABLE OF emp%rowtype
+      INDEX BY PLS_INTEGER;
+
+    t emp_tab_rec_type;
+  begin
+    select * BULK COLLECT INTO t
+    from emp
+    where deptno = b;
+
+    for i in t.first .. t.last loop
+      p.p(t(i).empno||' '||t(i).ename||' '||t(i).sal);
+    end loop;
+  end;
+  /
+
+  exec p1(20)
+
+ [6]
+
+  create or replace procedure p1(b number)
+  is
+    TYPE emp_rec_type IS RECORD
+    (ename emp.ename%type, 
+     sal   emp.sal%type, 
+     job   emp.job%type);
+    
+    TYPE emp_tab_rec_type IS TABLE OF emp_rec_type
+      INDEX BY PLS_INTEGER;
+
+    t emp_tab_rec_type;
+  begin
+    select ename, sal, job BULK COLLECT INTO t
+    from emp
+    where deptno = b;
+
+    for i in t.first .. t.last loop
+      p.p(t(i).ename||' '||t(i).sal||' '||t(i).job);
+    end loop;
+  end;
+  /
+
+  exec p1(20)
+
+# 문제.아래와 같이 결과가 나타나도록 프로시져를 만드세요
+
+        10 ACCOUNTING     NEW YORK
+
+           7782 CLARK            2450
+           7839 KING             5000
+           7934 MILLER           1300
+
+        20 RESEARCH       DALLAS
+
+           7566 JONES            2975
+           7902 FORD             3000
+           7876 ADAMS            1100
+           7369 SMITH             800
+           7788 SCOTT            3000
+
+        30 SALES          CHICAGO
+
+           7521 WARD             1250
+           7844 TURNER           1500
+           7499 ALLEN            1600
+           7900 JAMES             950
+           7698 BLAKE            2850
+           7654 MARTIN           1250
+
+        40 OPERATIONS     BOSTON
+
+  해답.
+
+  create or replace procedure p1
+  is
+  begin
+    for d in (select * from dept) loop
+      p.p(d.deptno||' '||d.dname||' '||d.loc);
+
+      for e in (select * from emp where deptno = d.deptno) loop
+        p.p('-----'||e.empno||' '||e.ename||' '||e.sal);      
+      end loop; 
+    end loop;
+  end;
+  /
+
+  exec p1
+
+# DML 예제
+
+  drop table t1 purge;
+
+  create table t1 
+  as
+  select empno, ename, sal from emp where 1 = 2;
+
+  create or replace procedure up_t1_insert
+    (p_empno emp.empno%type,
+     p_ename emp.ename%type,
+     p_sal   emp.sal%type)
+  is  
+  begin
+    insert into t1(empno, ename, sal)
+    values (p_empno, p_ename, p_sal);
+  end;
+  /
+
+  create or replace procedure up_t1_sal_update
+    (p_empno emp.empno%type,
+     p_sal   emp.sal%type)
+  is  
+  begin
+    update t1
+    set sal = p_sal
+    where empno = p_empno;
+  end;
+  /
+
+  create or replace procedure up_t1_delete
+    (p_empno emp.empno%type)
+  is  
+  begin
+    delete from t1
+    where empno = p_empno;
+  end;
+  /
+
+  exec up_t1_insert(1000, 'TOM', 2400)
+  exec up_t1_insert(2000, 'JOHN', 1900)
+  exec up_t1_insert(3000, 'EDDY', 3600)
+
+  commit;
+
+  exec up_t1_sal_update(2000, 2700)
+
+  commit;
+
+  exec up_t1_delete(2000)
+
+  select * from t1;
+
+  commit;
+
+# DML 예제 : Package로 변환
+
+  SQL> ed emp_pack.sql
+
+  create or replace package emp_pack
+  is 
+    procedure up_t1_insert
+      (p_empno emp.empno%type,
+       p_ename emp.ename%type,
+       p_sal   emp.sal%type);
+
+    procedure up_t1_sal_update
+      (p_empno emp.empno%type,
+       p_sal   emp.sal%type);
+
+    procedure up_t1_delete
+      (p_empno emp.empno%type);
+  end;
+  /
+
+  SQL> ed emp_pack_body.sql
+
+  create or replace package body emp_pack
+  is 
+    procedure up_t1_insert
+      (p_empno emp.empno%type,
+       p_ename emp.ename%type,
+       p_sal   emp.sal%type)
+    is  
+    begin
+      insert into t1(empno, ename, sal)
+      values (p_empno, p_ename, p_sal);
+    end;
+
+    procedure up_t1_sal_update
+      (p_empno emp.empno%type,
+       p_sal   emp.sal%type)
+    is  
+    begin
+      if p_sal <= 1000 then
+        p.p('what?');
+      elsif p_sal <= 2000 then
+        p.p('oh no!');
+      else
+        update t1
+        set sal = p_sal
+        where empno = p_empno;
+      end if;
+    end;
+
+    procedure up_t1_delete
+      (p_empno emp.empno%type)
+    is  
+    begin
+      delete from t1
+      where empno = p_empno;
+    end;
+  end;
+  /
+
+  SQL> exit
+
+  C:\Users\student> dir emp*
+
+  2017-04-14  오후 04:30               343 emp_pack.sql
+  2017-04-14  오후 04:30               640 emp_pack_body.sql
+  
+  C:\Users\student> wrap iname=emp_pack_body.sql
+
+  2017-04-14  오후 04:30               343 emp_pack.sql
+  2017-04-14  오후 04:31               511 emp_pack_body.plb
+  2017-04-14  오후 04:30               640 emp_pack_body.sql
+
+  C:\Users\student>ic
+
+  SQL> @emp_pack.sql
+  SQL> @emp_pack_body.plb
+  
+  SQL> # 테스트
+
+  truncate table t1;
+
+  drop procedure up_t1_insert;
+  drop procedure up_t1_sal_update;
+  drop procedure up_t1_delete;
+
+  exec emp_pack.up_t1_insert(1000, 'TOM', 2400)
+  exec emp_pack.up_t1_insert(2000, 'JOHN', 1900)
+  exec emp_pack.up_t1_insert(3000, 'EDDY', 3600)
+
+  commit;
+
+  select * from t1;
+
+  set serveroutput on
+
+  exec emp_pack.up_t1_sal_update(2000, 900)
+  exec emp_pack.up_t1_sal_update(2000, 1900)
+  exec emp_pack.up_t1_sal_update(2000, 2700)
+
+  commit;
+
+  exec emp_pack.up_t1_delete(2000)
+
+  select * from t1;
+
+  commit;
+
+===================
+ 1장
+===================  
+
+# user-defined function
+
+  create or replace function f1 
+   (a number, 
+    b number) 
+    return number
+  is
+  begin
+    return a * b;
+  end;
+  /  
+
+  show errors
+
+  select f1(24, 39)
+  from dual;
+
+===================
+ 2장
+=================== 
+
+  - 변수(Variable)      ≒ 그릇
+  - 상수(Constant)      ≒ 그릇
+  - 매개변수(Parameter) ≒ 그릇
+  - 인자(인수, Argument, 아규먼트)
+
+# 변수의 유형
+
+  PL/SQL 변수:
+
+    - Scalar    : 문자, 숫자, 날짜, Boolean
+    - Composite : PL/SQL Record, PL/SQL Table, ...
+    - Reference
+    - LOB
+  
+    cf.https://docs.oracle.com/cd/B10501_01/appdev.920/a96624/03_types.htm#10519
+
+  Non-PL/SQL 변수:
+
+    - Substitution 변수
+    - Bind 변수
+
+  SQL> ed a001.sql
+
+  accept sv_empno number prompt 'Enter EMPNO Please : '
+
+  var a number
+
+  declare 
+    v_empno emp.empno%type := &sv_empno;
+  begin
+    select sal into :a 
+    from emp 
+    where empno = v_empno;
+  end;
+  /
+
+  print a
+
+  SQL> @a001
+  Enter EMPNO Please : 7788
+
+  SQL> select * from emp
+       where sal >= :a;
+
+# 변수가 만들어질 때 일어나는 일
+
+  v_no number := 0; 1.메모리 할당(실주소) 
+                    2.메모리 별명(변수명)
+                    3.Data Type
+                    4.Data
+
+# 2-9
+
+  DECLARE
+    v_event VARCHAR2(15);
+  BEGIN
+    v_event := q'!Father's day!';
+    DBMS_OUTPUT.PUT_LINE('3rd Sunday in June is :'|| v_event );
+
+    v_event := q'[Mother's day]';
+    DBMS_OUTPUT.PUT_LINE('2nd Sunday in May is :'|| v_event );
+  END;
+  /
+
+# 2-32
+
+  SQL> ed a002.sql
+
+  VARIABLE b_emp_salary NUMBER
+
+  BEGIN
+    SELECT salary INTO :b_emp_salary
+    FROM employees WHERE employee_id = 178;  
+  END;
+  /
+
+  PRINT b_emp_salary
+
+  SELECT first_name, last_name
+  FROM employees 
+  WHERE salary=:b_emp_salary;
+
+  SQL> @a002.sql  
+
+=========================
+ 3장 PL/SQL Statment
+=========================
+
+# Lexical unit(어휘 단위)
+
+  A line of PL/SQL text contains groups of characters
+  known as lexical units:
+
+  - 구분자(Delimiter)  : simple and compound symbols
+  - 식별자(Identifier) : which include reserved words
+  - 리터럴(Literal)
+  - 주석(Comment)
+
+# 3-13
+
+  set serveroutput on
+
+  begin
+    begin
+      p.p('--------------');
+    end;
+
+    declare 
+      amu varchar2(10) := 'Happy';
+    begin 
+      p.p('Oh '||amu||' Day!');
+    end;
+
+    begin 
+      p.p('--------------');
+    end;
+  end;
+  /
+
+    ↓↓
+
+  create or replace procedure p_line
+  is
+  begin 
+    p.p('--------------');
+  end;
+  /
+
+  begin
+    p_line;
+
+    begin 
+      p.p('Oh Happy Day!');
+    end;
+
+    p_line;
+  end;
+  /
+
+# 3-14
+
+  declare
+    procedure p_sub
+    is
+    begin
+      p.p('Time goes by and goes into the future.');
+    end;
+  begin
+    begin
+      p_sub;
+    end;
+  exception
+    when others then
+      begin
+        p_sub;
+      end;
+  end;
+  /
+
+# 변수의 Scope 및 Visibility
+
+  <<amu>>
+  DECLARE
+    v_father_name VARCHAR2(20):='Patrick';
+    v_date_of_birth DATE:='20-Apr-1972';
+  BEGIN
+
+    DECLARE
+      v_child_name VARCHAR2(20):='Mike';
+      v_date_of_birth DATE:='12-Dec-2002';
+    BEGIN
+      DBMS_OUTPUT.PUT_LINE('Father''s Name: '||v_father_name);
+      DBMS_OUTPUT.PUT_LINE('Date of Birth: '||amu.v_date_of_birth);
+      DBMS_OUTPUT.PUT_LINE('Child''s Name: '||v_child_name);
+      DBMS_OUTPUT.PUT_LINE('Date of Birth: '||v_date_of_birth); 
+    END;
+
+  END;
+  /
+
+# 3-19
+
+  <<outer>>
+  DECLARE
+    v_sal     NUMBER(7,2) := 60000;
+    v_comm    NUMBER(7,2) := v_sal * 0.20;
+    v_message VARCHAR2(255) := ' eligible for commission';
+  BEGIN 
+    DECLARE
+      v_sal        NUMBER(7,2) := 50000;
+      v_comm       NUMBER(7,2) := 0;
+      v_total_comp NUMBER(7,2) := v_sal + v_comm;
+    BEGIN 
+      v_message := 'CLERK not'||v_message;
+
+      p.p(v_message);         -- 1 CLERK not eligible for commission
+      p.p(v_comm);            -- 2 0 
+      p.p(outer.v_comm);      -- 3 12000
+
+      outer.v_comm := v_sal * 0.30; 
+    END;
+    v_message := 'SALESMAN, '||v_message;
+
+    -- p.p(v_total_comp);     -- 4 에러
+    p.p(v_comm);              -- 5 15000
+    p.p(v_message);           -- 6 SALESMAN, CLERK not eligible for commission
+  END;
+  /
+
+# 3-24
+
+  http://orapybubu.blog.me/40023835579
+
+=============================
+ 4장 SQL Statment in Block
+=============================
+
+# 4-4 
+
+  BEGIN
+    - DDL : CREATE, ALTER, DROP, RENAME, TRUNCATE, COMMENT   : 사용 불가
+    - DML : INSERT, UPDATE, DELETE, MERGE, SELECT            : 사용 가능
+    - TCL : COMMIT, ROLLBACK, SAVEPOINT                      : 사용 가능
+    - DCL : GRANT, REVOKE                                    : 사용 불가
+  END;
+
+  => 이유 : https://docs.oracle.com/cd/A57673_01/DOC/server/doc/PLS23/ch5.htm#toc043
+
+# 4-21 
+
+  Cursor - 암시적 커서 : 1건 SELECT, DML 및 DDL에 활용
+         - 명시적 커서 : 여러 건 SELECT
+
+  drop table t1 purge;
+  create table t1 as select * from emp;
+  
+  begin
+    update t1
+    set sal = sal + 100
+    where deptno = &sv_deptno;
+
+    if sql%notfound then
+      p.p('There are no modifications!');
+    end if;
+
+    if sql%found then
+      p.p(sql%rowcount||' rows has been fixed.');
+    end if;
+  end;
+  /
+
+  SQL> /
+  Enter value for sv_deptno: 10
+
+  SQL> /
+  Enter value for sv_deptno: 90
+
+=============================
+ 5장 Control Structures
+=============================
+
+# 제어 구조
+
+  Selection : if statement, case statement
+  Iteration : basic loop, while loop, for loop
+  Sequnce   : goto, null
+
+# 5-28
+
+  ~ i는 할당의 대상이 될 수 없다
+
+  declare
+    v_no number;
+  begin
+    for i in 1..10 loop
+      -- i := i + 1;      -- 에러 : PLS-00363: expression 'I' cannot be used as an assignment target
+      v_no := i;
+    end loop;
+  end;
+  /
+
+  ~ i는 1씩 증가한다. 다르게 증가하는 것처럼 사용하려면 아래와 같이 한다
+
+  begin
+    for i in 0..10 loop
+      if mod(i, 2) = 0 then
+        p.p(i);
+      end if;
+    end loop;
+  end;
+  /
+
+# 5-31
+  
+  begin
+    <<multi>>
+    for i in 2..9 loop
+      p.p(i||':');
+
+      <<campus>>
+      for j in 1..9 loop
+        p.p(i||' * '||j||' = '||i*j);
+        exit multi when i*j > 50;
+      end loop;
+
+    end loop;
+  end;
+  /
+
+  문제.사칙 연산 계산기 만들기
+
+       7788 사원의 SAL을 구해서 사칙 연산을 수행한 결과를 출력하세요
+
+       exec calculator(7788, 100, 'add')
+       exec calculator(7788, 100, 'subtract')
+       exec calculator(7788, 1.2, 'multiplication')
+       exec calculator(7788, 0.9, 'division')
+
+       해답 1.
+
+       create or replace procedure calculator
+         (a emp.empno%type, 
+          b number, 
+          c varchar2)
+       is
+         v_ret number;
+       begin
+         select case c when 'add'            then sal + b
+                       when 'subtract'       then sal - b
+                       when 'multiplication' then sal * b
+                       when 'division'       then sal / b
+                end into v_ret
+         from emp
+         where empno = a;
+
+         p.p(v_ret);
+       end;
+       /
+       
+       해답 2.
+
+       create or replace procedure calculator
+         (a emp.empno%type, 
+          b number, 
+          c varchar2)
+       is
+         v_sal emp.sal%type;
+       begin
+         select sal into v_sal
+         from emp
+         where empno = a;
+
+         if c = 'add' then
+           p.p(v_sal + b);
+         elsif c = 'subtract' then
+           p.p(v_sal - b);
+         elsif c = 'multiplication' then
+           p.p(v_sal * b);
+         elsif c = 'division' then
+           p.p(v_sal / b);
+         else 
+           p.p('There is no such operation!');
+         end if;
+       end;
+       /       
+
+=============================
+ 6장 Composite Data types
+=============================
+
+# 6-10 
+
+  create or replace view v7
+  as 
+  select empno, ename, sal, job, hiredate
+  from emp;
+
+  create or replace procedure p1(a number)
+  is
+    r v7%rowtype;
+  begin
+    select empno, ename, sal, job, hiredate into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename);
+    p.p(r.sal);
+  end;
+  /
+
+  exec p1(7788)
+
+# 6-22 Using Collection Methods
+
+  https://docs.oracle.com/cd/B28359_01/appdev.111/b28370/collections.htm#LNPLS005
+
+# 6-23
+
+  예제1.
+
+  create or replace procedure p1
+  is
+    type yb is table of dept.dname%type
+      index by pls_integer;
+
+    t yb;
+  begin
+    select dname bulk collect into t 
+    from dept;    
+
+    -- p.p(t.count);
+    -- p.p(t.first);
+    -- p.p(t.last);
+    -- p.p(t(1));
+
+    for i in t.first .. t.last loop
+      p.p(t(i));
+    end loop;
+  end;
+  /
+
+  exec p1;
+
+  예제2.
+ 
+  create or replace procedure p1
+  is
+    type yb is table of dept%rowtype
+      index by pls_integer;
+    t yb;
+  begin
+    select * bulk collect into t 
+    from dept;
+
+    for i in t.first .. t.last loop
+      p.p(t(i).deptno||' '||t(i).dname||' '||t(i).loc);
+    end loop;
+  end;
+  /
+
+  exec p1;
+
+# 6-23
+
+  DECLARE
+    TYPE dept_table_type IS TABLE OF departments%ROWTYPE
+      INDEX by PLS_INTEGER;
+    dept_table dept_table_type;
+  Begin
+    SELECT * bulk collect INTO dept_table FROM departments;
+
+    for i in dept_table.first .. dept_table.last loop
+      DBMS_OUTPUT.PUT_LINE(dept_table(i).department_id ||' '||dept_table(i).department_name ||' '||dept_table(i).manager_id);
+    end loop;
+  END;
+  /
+
+# 6-24
+
+  DECLARE
+    TYPE emp_table_type IS TABLE OF employees%ROWTYPE 
+      INDEX BY PLS_INTEGER;
+    my_emp_table  emp_table_type;   
+  BEGIN
+    SELECT *  bulk collect INTO my_emp_table
+    FROM employees
+    WHERE employee_id between 100 and 104;
+
+    FOR i IN my_emp_table.FIRST..my_emp_table.LAST LOOP
+      DBMS_OUTPUT.PUT_LINE(my_emp_table(i).last_name);
+    END LOOP;
+  END; 
+  /
+
+=============================
+ 7장 명시적 커서
+=============================
+
+# 7-12
+ 
+  declare
+    CURSOR c1 IS
+      select employee_id, last_name, salary, job_id, department_id
+      from employees
+      order by salary desc;
+
+    r c1%rowtype;
+  begin
+    if not c1%isopen then
+      OPEN c1;
+    end if;
+
+    loop 
+      FETCH c1 INTO r;
+      exit when c1%notfound or c1%rowcount > 3;
+      p.p(r.employee_id||' '||r.last_name||' '||r.salary);
+    end loop;
+
+    CLOSE c1;
+  end;
+  /
+
+    ---
+
+  declare
+    CURSOR c1 IS
+      select employee_id, last_name, salary, job_id, department_id
+      from employees
+      order by salary desc;
+
+    type yb is table of c1%rowtype
+      index by pls_integer;
+
+    t yb;
+  begin
+    OPEN c1;
+    FETCH c1 BULK COLLECT INTO t;
+
+    for i in t.first .. t.last loop
+      exit when i > 3;
+      p.p(t(i).employee_id||' '||t(i).last_name||' '||t(i).salary);
+    end loop;
+
+    CLOSE c1;
+  end;
+  /
+
+    ---
+
+  declare
+    CURSOR c1 IS
+      select employee_id, last_name, salary, job_id, department_id
+      from employees
+      order by salary desc;
+  begin
+    for r in c1 loop
+      exit when c1%rowcount > 3;
+      p.p(r.employee_id||' '||r.last_name||' '||r.salary);
+    end loop;
+  end;
+  /
+
+    ---
+
+  declare
+    n number := 1;
+  begin
+    for r in (select employee_id, last_name, salary, job_id, department_id
+              from employees
+              order by salary desc) loop
+      exit when n > 3;
+      p.p(r.employee_id||' '||r.last_name||' '||r.salary);
+      n := n + 1;
+    end loop;
+  end;
+  /
+
+# 7-22
+
+  declare
+    cursor c1(a number) is
+      select * 
+      from emp
+      where deptno = a
+      order by sal desc;
+  begin
+    for r in c1(20) loop
+      p.p(r.empno||' '||r.sal);
+    end loop;
+
+    p.p('-------------------');
+
+    for r in c1(30) loop
+      p.p(r.empno||' '||r.sal);
+    end loop;
+  end;
+  /
+
+# 7-26
+
+  drop table t1 purge;
+  create table t1 as select * from emp;
+
+  create or replace procedure p1(a number)
+  is
+    cursor c1 is
+      select * 
+      from t1
+      where deptno = a
+      for update wait 30;
+
+    r c1%rowtype;
+  begin
+    open c1;
+
+    loop 
+      fetch c1 into r; 
+      exit when c1%notfound;
+
+      update t1
+      set sal = r.sal * 1.1
+      where empno = r.empno;
+    end loop;
+
+    close c1;
+  end;
+  /
+
+  execute p1(10)
+  execute p1(30)
+
+    ↓↓
+
+  drop table t1 purge;
+  create table t1 as select * from emp;
+
+  create or replace procedure p1(a number)
+  is
+    cursor c1 is
+      select rowid as rid, e.* 
+      from t1 e
+      where deptno = a
+      for update wait 30;
+
+    r c1%rowtype;
+  begin
+    open c1;
+
+    loop 
+      fetch c1 into r; 
+      exit when c1%notfound;
+
+      update t1
+      set sal = r.sal * 1.1
+      where rowid = r.rid;
+    end loop;
+
+    close c1;
+  end;
+  /
+
+  execute p1(10)
+  execute p1(30)
+
+    ↓↓
+
+  drop table t1 purge;
+  create table t1 as select * from emp;
+
+  create or replace procedure p1(a number)
+  is
+    cursor c1 is
+      select * 
+      from t1
+      where deptno = a
+      for update wait 30;
+
+    r c1%rowtype;
+  begin
+    open c1;
+
+    loop 
+      fetch c1 into r; 
+      exit when c1%notfound;
+
+      update t1
+      set sal = r.sal * 1.1
+      where CURRENT OF C1;
+    end loop;
+
+    close c1;
+  end;
+  /
+
+  execute p1(10)
+  execute p1(30)
+
+=============================
+ 8장 Exception Handling
+=============================
+
+# Error - Syntax Error
+        - Runtime Error(= Exception)
+ 
+          -> Oracle Defined exception - Predefined exception     -> [1] when 이름 then
+                                      - Non-Predefined exception -> [2] 이름을 붙여서 처리
+                                                                 -> [3] when others then                                       
+          -> User Defined exception                              -> [4] 선언, raise, 처리
+                                                                 -> [5] raise_application_error 프로시져
+ 
+# Every Oracle error has a number, 
+  but exceptions must be handled by name.
+
+# Note.
+
+  An exception raised in a declaration propagates immediately to the enclosing block.
+  An exception raised inside a handler propagates immediately to the enclosing block.
+
+# PL/SQL-면접문제
+
+  https://goo.gl/OaL8Tl
+
+# Syntax Error
+
+  create or replace procedure p1
+  is
+  begin
+    nul;    -- syntax error
+  end;
+  /
+
+# Exception 발생 뒤에도 반드시 수행되기 원하는 문장이 있다면
+
+  create or replace procedure p1(a number, b number)
+  is
+  begin
+    p.p(a/b);
+    p.p('The important work goes on.');
+  exception
+    when ZERO_DIVIDE then
+      p.p('Can not divide by 0!');
+  end;
+  /
+  
+  exec p1(100, 2)
+  exec p1(100, 0)
+
+    ↓↓
+
+  create or replace procedure p1(a number, b number)
+  is
+  begin
+    begin
+      p.p(a/b);
+    exception
+      when ZERO_DIVIDE then
+        p.p('Can not divide by 0!');
+    end;
+
+    p.p('The important work goes on.');
+  end;
+  /
+  
+  exec p1(100, 2)
+  exec p1(100, 0)
+
+------------------------
+ [1] when 이름 then
+------------------------
+
+  create or replace procedure p1(a number, b number)
+  is
+  begin
+    p.p(a/b);
+  exception
+    when ZERO_DIVIDE then
+      p.p('Can not divide by 0!');
+  end;
+  /
+  
+  exec p1(100, 2)
+  exec p1(100, 0)
+
+    --
+
+  create or replace procedure p1(a number)
+  is
+    v_loc dept.loc%type;
+  begin
+    select loc into v_loc
+    from dept
+    where deptno = a; 
+
+    p.p(v_loc);
+  exception 
+    when no_data_found then
+      p.p('There is no such department!');
+  end;
+  /
+  
+  exec p1(10)
+  exec p1(80)
+
+    --
+
+  create or replace procedure p1(a number)
+  is
+    v_ename emp.ename%type;
+  begin
+    select ename into v_ename
+    from emp
+    where deptno = a; 
+
+    p.p(v_ename);
+  exception
+    when TOO_MANY_ROWS then
+      p.p('There are several results returned!');
+  end;
+  /
+  
+  exec p1(10)
+
+[2] 이름을 붙여서 처리
+
+  drop table t1 purge;
+  create table t1 (no number primary key);
+
+  create or replace procedure p1(a number)
+  is
+    e_null exception;
+    pragma exception_init(e_null, -1400);
+  begin
+    insert into t1 values(a);
+  exception
+    when e_null then
+      p.p('You can not enter a null value.');
+  end;
+  /
+
+  exec p1(null)
+
+    ↓↓
+
+  create or replace package pack1
+  is
+    e_null exception;
+    pragma exception_init(e_null, -1400);
+  end;
+  /
+
+  create or replace procedure p1(a number)
+  is
+  begin
+    insert into t1 values(a);
+  exception
+    when pack1.e_null then
+      p.p('You can not enter a null value.');
+  end;
+  /
+
+  exec p1(null)
+
+[3] when others then                                       
+
+  drop table plsql_errors purge;
+
+  create table plsql_errors 
+  (Occurrence  timestamp,
+   block_name  varchar2(30),
+   sql_code    varchar2(30),
+   sql_errm    varchar2(200));
+
+  create or replace procedure p1(a number)
+  is
+    v_sqlcode plsql_errors.sql_code%type;
+    v_sqlerrm plsql_errors.sql_errm%type;
+  begin
+    insert into t1 values(a);
+  exception
+    when others then
+      p.p('Error occurred : '||sqlcode);
+      p.p('Error Error    : '||sqlerrm);
+
+      v_sqlcode := sqlcode;
+      v_sqlerrm := sqlerrm;
+
+      insert into plsql_errors 
+      values (sysdate, 'p1', v_sqlcode, v_sqlerrm);
+  end;
+  /
+
+  exec p1(null)
+  exec pt('select * from plsql_errors')
+
+---------------------------------
+ [4] 선언, raise, 처리
+---------------------------------
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+    e_too_low exception;
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+
+    if v_sal < 1000 then
+      raise e_too_low;
+    end if;
+
+    p.p('The important work goes on');
+  exception
+    when e_too_low then
+      p.p('The salary is too low.');
+  end;
+  /
+
+  exec p1(7369)
+  exec p1(7499)
+
+    --
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+
+    if v_sal < 1000 then
+      raise zero_divide;
+    end if;
+
+    p.p('The important work goes on');
+  exception
+    when zero_divide then
+      p.p('The salary is too low.');
+  end;
+  /
+
+  set serverout on
+
+  exec p1(7369)
+
+
+------------------------------------------
+ [5] raise_application_error 프로시져
+------------------------------------------
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+
+    if v_sal < 1000 then
+      raise_application_error(-20100, 'The salary is too low.');
+    end if;
+  end;
+  /
+
+  exec p1(7369)
+
+    ↓↓
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+
+    e_too_low exception;
+    pragma exception_init(e_too_low, -20100);
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+
+    if v_sal < 1000 then
+      raise_application_error(-20100, 'The salary is too low.');
+    end if;
+
+  exception
+    when e_too_low then
+      p.p('too low');
+  end;
+  /
+
+  exec p1(7369)
+
+
+  cf.트리거(Trigger)를 이용해서 특정 IP 접속 제한하기 
+ 
+     CREATE OR REPLACE TRIGGER HR10_LOGON_TRI
+     after LOGON ON dream30.SCHEMA
+     BEGIN
+       IF SUBSTR(sys_context('USERENV', 'IP_ADDRESS'), 1, 8) in ('70.12.50', '70.12.51')  then
+            RAISE_APPLICATION_ERROR (-20002, 'IP '||ORA_CLIENT_IP_ADDRESS
+               ||' is not allowed to connect database!');
+       END IF;
+     END;
+     /
+
+=========================================
+ Develop PL/SQL Program Units
+=========================================
+
+-----------------------
+ (Stored) Procedure
+-----------------------
+
+# Parameter(매개변수)
+
+  - Formal Parameter(형식 매개변수)
+
+    ~ in
+    ~ out
+    ~ in out
+
+  - Actual Parameter(실 매개변수)
+
+    ~ positinal(위치법)
+    ~ named    (명명법)
+    ~ composite(조합법)
+
+# 매개변수의 유형
+
+  create or replace procedure p1(a in number, b in number, c out number)
+  as
+  begin
+    c := a + b;
+  end;
+  /
+
+  [테스트 방법 :1]
+
+    set serveroutput on
+
+    declare
+      v_a number := 100;
+      v_b number := 100;
+      v_c number := 0;
+    begin
+      p1(v_a, v_b, v_c);                  -- positinal 
+      p1(b => v_b, c => v_c, a => v_a);   -- named
+      p1(v_a, c => v_c, b => v_b);        -- composite
+    end;
+    /
+
+  [테스트 방법 : 2]
+
+    var b_a number
+    var b_b number
+    var b_c number
+
+    exec :b_a := 100
+    exec :b_b := 100
+
+    exec p1(:b_a, :b_b, :b_c)  
+    exec p1(b => :b_b, c => :b_c, a => :b_a)  
+    exec p1(:b_a, c => :b_c, b => :b_b)  
+
+    print b_c
+
+# in, out 매개변수 예제 하나 더
+
+  drop table t1 purge;
+
+  create table t1 
+  as 
+  select empno c1, sal c2, comm c3
+  from emp 
+  where 1 = 2;
+
+  create or replace procedure p1
+  (a in number, b out number, c out number)  
+  is
+  begin
+    select sal, comm into b, c
+    from emp
+    where empno = a;
+  end;
+  /
+
+  create or replace procedure up_t1_insert(p_empno number)
+  is
+    v_sal  number;
+    v_comm number;
+  begin
+    p1(p_empno, v_sal, v_comm); 
+
+    insert into t1
+    values (p_empno, v_sal, v_comm);
+  end;
+  /
+  
+  select * from t1;
+
+  exec up_t1_insert(7788)
+
+  select * from t1;
+
+  exec up_t1_insert(7566)
+
+# in out 매개변수
+
+  create or replace procedure p1(a in out varchar2)
+  is
+  begin
+    a := substr(a, 1, 3)||'-'||substr(a, 4, 4)||'-'||substr(a, 8);
+  end;
+  /
+
+  declare
+    v_out varchar2(50) := '01012347890';
+  begin
+    p1(v_out);
+
+    p.p(v_out);
+  end;
+  /
+
+# 1-23
+
+  create or replace procedure up_mode
+   (a in     number default 0, 
+    b out    number, 
+    c in out number)
+  is 
+    v number;
+  begin
+    v := a;
+    -- a := 100;    -- expression 'A' cannot be used as an assignment target
+
+    v := b;
+    b := 100;
+
+    v := c;
+    c := 100;
+  end;
+  /
+
+  declare
+    v1 number;
+    v2 number;
+    v3 number;
+  begin
+    -- up_mode(100, 100, 100);    -- expression '100' cannot be used as an assignment target
+    up_mode(100, v2, v3);
+    up_mode(v1, v2, v3);
+    up_mode(b => v2, c => v3);
+  end;
+  /
+
+-----------------------
+ (Stored) Function
+-----------------------
+
+# 사용자 정의 함수 생성 및 활용
+
+  create or replace function f1
+   (a in number, 
+    b in number)
+    return number
+  as
+  begin
+    return a * b;
+  end f1;
+  /
+
+  [사용법 1]
+
+    set serveroutput on
+
+    begin
+      dbms_output.put_line(initcap('scott'));
+      dbms_output.put_line(f1(100, 100));
+    end;
+    /
+
+  [사용법 2]
+
+    variable b_ret number
+    exec :b_ret := f1(100, 100)
+    print b_ret
+
+  [사용법 3]
+
+    select empno, sal, comm, f1(sal, 12) + nvl(comm, 0) as ann_sal
+    from emp;
+
+    select empno, sal, comm, f1(b => 12, a => sal) + nvl(comm, 0) as ann_sal
+    from emp;
+
+# 사용자 정의 함수의 다양한 모습
+
+  create or replace function f1 
+   (a in     number, 
+    b out    number,
+    c in out number)
+    return number
+  as
+  begin
+    return a + b + c;
+  end f1;
+  /
+  
+  declare
+    v1 number := 0;
+    v2 number;
+    v3 number;
+    v4 number;
+  begin 
+    v4 := f1(v1, v2, v3);            -- 성공
+
+    select f1(v1, v2, v3) into v4    -- 실패
+    from dual;
+  end;
+  /
+
+    ---------
+
+  create or replace function f1
+   (a in number)
+    return emp%rowtype
+  as
+    r emp%rowtype;
+  begin
+    select * into r
+    from emp
+    where empno = a;    
+
+    return r;
+  end f1;
+  /
+
+  declare
+    emp_rec emp%rowtype;
+  begin 
+    emp_rec := f1(7788);    -- 성공
+  end;
+  /
+
+  select f1(7788)           -- 실패         
+  from dual;
+
+# 여러 행 여러 열 리턴
+
+  [0] 준비
+ 
+  create or replace package pack1
+  is
+    type emp_rec_tab_type is table of emp%rowtype
+      index by pls_integer;
+
+    r emp_rec_tab_type;
+  end;
+  /
+
+  [1] 프로시져일 경우
+
+  create or replace procedure p1
+    (a in  emp.deptno%type,
+     b out pack1.emp_rec_tab_type)
+  is
+  begin
+    select * bulk collect into b
+    from emp
+    where deptno = a;
+  end;
+  /
+
+  begin
+    p1(10, pack1.r);
+
+    for i in pack1.r.first .. pack1.r.last loop
+      p.p(pack1.r(i).empno||' '||pack1.r(i).ename);
+    end loop;
+  end;
+  /
+
+  begin
+    for rec in (select deptno from dept) loop
+      p1(rec.deptno, pack1.r);
+
+      for i in pack1.r.first .. pack1.r.last loop
+        p.p(pack1.r(i).empno||' '||pack1.r(i).ename);
+      end loop;
+
+      p.p('---------------');
+    end loop;
+  exception
+    when others then
+      null;
+  end;
+  /
+
+  [2] 함수일 경우
+
+  create or replace function f1
+    (a emp.deptno%type)
+    return pack1.emp_rec_tab_type
+  is
+  begin
+    select * bulk collect into pack1.r
+    from emp
+    where deptno = a;
+
+    return pack1.r;
+  end;
+  /
+
+  begin
+     pack1.r := f1(10);
+
+    for i in pack1.r.first .. pack1.r.last loop
+      p.p(pack1.r(i).empno||' '||pack1.r(i).ename);
+    end loop;
+  end;
+  /
+
+# 
+
+  create or replace function f_terms(term varchar2)
+    return clob
+  is 
+    v_ret clob;
+  begin
+    if lower(term) = 'ai' then
+      v_ret := 'Artificial intelligence (AI) 
+is intelligence exhibited by machines. 
+
+In computer science, the field of AI 
+research defines itself as the study of 
+"intelligent agents": 
+
+any device that perceives its environment
+and takes actions that maximize its chance of 
+success at some goal.';
+
+    elsif lower(term) = 'ml' then
+      v_ret := 'Machine learning is the subfield of computer science that, according to Arthur Samuel in 1959, gives "computers the ability to learn without being explicitly programmed.';
+    end if;
+
+    return v_ret;
+  end;
+  /
+
+  drop table t1 purge;
+
+  create table t1 (no, name)
+  as 
+  select 1, 'ai' from dual
+  union all
+  select 2, 'ml' from dual;
+
+  select * from t1;
+
+  select no, upper(name) as term, f_terms(name) as description
+  from t1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

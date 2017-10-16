@@ -1,0 +1,533 @@
+
+================
+ PL/SQL
+================
+
+  - program? 해야 할 일을 미리 기술해 놓은 것
+
+  - https://en.wikipedia.org/wiki/SQL#Procedural_extensions
+
+  - PL/SQL = SQL(Data Manipulating) + 3GL(Data Processing)
+  - Pascal -> Ada -> PL/SQL
+
+  - block 구조의 언어
+   
+     -> Anonymous Block 
+     -> Named Block : procedure, function, package, trigger, object, ...
+
+     declare       -- 옵션
+       선언부
+     begin         -- 필수
+       실행부
+     exception     -- 옵션
+       예외처리부
+     end;          -- 필수
+     /
+
+     create or replace [procedure|function] 이름
+     is
+       선언부
+     begin         -- 필수
+       실행부
+     exception     -- 옵션
+       예외처리부
+     end;          -- 필수
+     /
+
+  - 연산자 비교
+
+                         할당       비교
+
+    c, java              a = 100    a == 100
+    basic, powerscript   a = 100    a = 100
+    pascal, pl/sql       a := 100   a = 100
+
+# 무작정 따라하기
+
+  set serveroutput on
+
+  begin
+    dbms_output.put_line('Hello World!');
+  end;
+  /
+
+  begin
+    for i in 1..100 loop
+      dbms_output.put_line(i);
+    end loop;
+  end;
+  /
+
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(2*i);
+    end loop;
+  end;
+  /
+
+  declare
+    v_avg_sal number;
+  begin
+    select avg(sal) into v_avg_sal
+    from emp 
+    where deptno = &sv_deptno;
+  
+    dbms_output.put_line(v_avg_sal);
+  end;
+  /
+
+  create or replace procedure p1
+  is
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(2*i);
+    end loop;
+  end;
+  /
+
+  show errors
+
+  exec p1
+
+    ------
+
+  SQL> ed src
+
+  set lines 200
+  set pages 100
+  set verify off
+
+  col name format a30
+  col type noprint
+  col text format a70
+  break on name skip page
+
+  select *   
+  from user_source
+  where name like upper('%&1%');
+
+  col name clear
+  col type print
+  col text clear
+  clear break
+
+  set lines 200
+  set pages 40
+  set verify on
+
+  SQL>  src
+
+    ------
+
+  create or replace procedure p1(amu number)
+  is
+  begin
+    for i in 1..9 loop
+      dbms_output.put_line(amu*i);
+    end loop;
+  end;
+  /
+
+  show errors
+
+  exec p1(7)
+  exec p1(8)
+
+# 조금 더 따라하기
+
+  create or replace procedure proc1(p_empno number)
+  is
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select ename, sal into v_ename, v_sal
+    from emp
+    where empno = p_empno;
+
+    dbms_output.put_line('ENAME : '||v_ename);
+    dbms_output.put_line('SAL : '||v_sal);
+  end;
+  /
+
+  show errors
+
+  exec proc1(7788)
+  exec proc1(4567)    -- ORA-01403: no data found
+
+  create or replace procedure proc1(p_empno number)
+  is
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select ename, sal into v_ename, v_sal
+    from emp
+    where empno = p_empno;
+
+    dbms_output.put_line('ENAME : '||v_ename);
+    dbms_output.put_line('SAL : '||v_sal);
+  exception
+    when no_data_found then
+      dbms_output.put_line(p_empno||' does not exists!');
+  end;
+  /
+
+  exec proc1(7788)
+  exec proc1(4567)
+
+# 지금은 이해 안되지만 좀 있으면 이해될 내용 참고 따라하기
+
+  ** PL/SQL 블럭에 사용되는 QUERY는 반드시 한건의 ROW만 리턴해야 하며
+     여러 건을 리턴할 경우 에러임. 이를 극복하기 위한 방법이 두가지 있는데
+     명시적 커서를 사용하거나 BULK COLLECT INTO를 사용하면 됨
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    v_empno emp.empno%type;
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+  begin
+    select empno, ename, sal INTO v_empno, v_ename, v_sal
+    from emp
+    where job = p_job;
+  end;
+  /
+
+  exec p1('MANAGER')   -- 에러 : ORA-01422: exact fetch returns more than requested number of rows
+
+    ↓↓
+
+  해결방법 1.명시적 커서
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    v_empno emp.empno%type;
+    v_ename emp.ename%type;
+    v_sal   emp.sal%type;
+
+    CURSOR c1 IS
+      select empno, ename, sal
+      from emp
+      where job = p_job;
+  begin
+    OPEN c1;
+
+    loop
+      FETCH c1 INTO v_empno, v_ename, v_sal;
+      exit when c1%notfound;
+      dbms_output.put_line(v_empno||' '||v_ename||' '||v_sal);
+    end loop;
+
+    CLOSE c1;
+  end;
+  /
+
+  exec p1('MANAGER')
+  exec p1('SALESMAN')
+
+    ↓↓
+
+  해결방법 2.BULK COLLECT INTO
+
+  create or replace procedure p1 (p_job emp.job%type)
+  is
+    TYPE emp_record_type IS RECORD 
+      (empno emp.empno%type,
+       ename emp.ename%type,
+       sal   emp.sal%type);
+
+    TYPE emp_record_table_type IS TABLE OF emp_record_type
+      INDEX BY PLS_INTEGER;
+
+    r emp_record_table_type;
+  begin
+    select empno, ename, sal BULK COLLECT INTO r
+    from emp
+    where job = p_job;
+
+    for i in r.first .. r.last loop
+      dbms_output.put_line(r(i).empno||' '||r(i).ename||' '||r(i).sal);
+    end loop;
+  end;
+  /
+
+  exec p1('MANAGER')
+  exec p1('SALESMAN')
+
+# 트리거 예제
+
+  drop table t1 purge;
+
+  create table t1 (no number, name varchar2(10));
+
+  create or replace trigger t1_name_tri
+  before insert or update of name on t1
+  for each row
+  begin
+    :new.name := upper(:new.name);
+  end;
+  /
+  
+  insert into t1 values(1000, 'abc');
+  insert into t1 values(2000, 'xyz');
+
+  select * from t1;
+
+  create or replace trigger t1_name_tri
+  before insert or update of name on t1
+  for each row
+  begin
+    :new.name := initcap(:new.name);
+  end;
+  /
+
+  update t1 
+  set name = name;
+  
+  insert into t1 values(3000, 'KOREA');
+
+  select * from t1;
+
+===================
+ 0장
+===================  
+
+  create or replace package p
+  is
+    procedure p(a number);
+    procedure p(a varchar2);
+    procedure p(a date);
+  end;
+  /
+
+  create or replace package body p
+  is
+    procedure p(a number)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+
+    procedure p(a varchar2)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+
+    procedure p(a date)
+    is
+    begin
+      dbms_output.put_line(a);
+    end;
+  end;
+  /
+
+ [1]
+
+  create or replace procedure p1(a number)
+  is
+    v_sal emp.sal%type;
+  begin
+    select sal into v_sal
+    from emp
+    where empno = a;
+  
+    p.p(v_sal);
+  end;
+  /
+
+  show errors
+
+  exec p1(7788)
+  exec p1(7900)
+
+ [2]
+
+  create or replace procedure p1(a number)
+  is
+    r emp%rowtype;
+  begin
+    select * into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.sal);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+ [3]
+
+  create or replace procedure p1(a number)
+  is
+    TYPE emp_rec_type IS RECORD 
+     (ename emp.ename%type, 
+      sal   emp.sal%type, 
+      job   emp.job%type);
+
+    r emp_rec_type;
+  begin
+    select ename, sal, job into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.job);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+    ↓↓
+
+  create or replace package pack1
+  is
+    TYPE emp_rec_type IS RECORD 
+     (ename emp.ename%type, 
+      sal   emp.sal%type, 
+      job   emp.job%type);
+  end;
+  /
+
+  create or replace procedure p1(a number)
+  is
+    r pack1.emp_rec_type;
+  begin
+    select ename, sal, job into r
+    from emp
+    where empno = a;
+
+    p.p(r.ename||' '||r.job);
+  end;
+  /
+
+  exec p1(7788)
+  exec p1(7900)
+
+
+ [4]
+
+  begin
+    select ename
+    from emp
+    where deptno = ?;
+  end;
+  /
+
+ [5]
+
+  begin
+    select *
+    from emp
+    where deptno = ?;
+  end;
+  /
+
+ [6]
+
+  begin
+    select ename, sal, job
+    from emp
+    where deptno = ?;
+  end;
+  /
+
+
+
+
+===================
+ 1장
+===================  
+
+# user-defined function
+
+  create or replace function f1 
+   (a number, 
+    b number) 
+    return number
+  is
+  begin
+    return a * b;
+  end;
+  /  
+
+  show errors
+
+  select f1(24, 39)
+  from dual;
+
+===================
+ 2장
+=================== 
+
+  - 변수(Variable)      ≒ 그릇
+  - 상수(Constant)      ≒ 그릇
+  - 매개변수(Parameter) ≒ 그릇
+  - 인자(인수, Argument, 아규먼트)
+
+# 변수의 유형
+
+  PL/SQL 변수:
+
+    - Scalar    : 문자, 숫자, 날짜, Boolean
+    - Composite : Record, Table, ...
+    - Reference
+    - LOB
+
+  Non-PL/SQL 변수:
+
+    - Substitution 변수
+    - Bind 변수
+
+
+
+
+
+
+
+# 변수가 만들어질 때 일어나는 일
+
+  v_no number := 0; 1.메모리 할당(실주소) 
+                    2.메모리 별명(변수명)
+                    3.Data Type
+                    4.Data
+
+# 2-9
+
+  DECLARE
+    v_event VARCHAR2(15);
+  BEGIN
+    v_event := q'!Father's day!';
+    DBMS_OUTPUT.PUT_LINE('3rd Sunday in June is :'|| v_event );
+
+    v_event := q'[Mother's day]';
+    DBMS_OUTPUT.PUT_LINE('2nd Sunday in May is :'|| v_event );
+  END;
+  /
+
+
+
+
+  select * into
+  from emp;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

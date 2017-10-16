@@ -1,0 +1,154 @@
+sql> show user
+
+set line size 100
+set pages
+sql> list <-l
+sql> run <-r
+
+
+#SQL
+
+https://ko.wikipedia.org/wiki/SQL
+
+#SQL분류
+
+-DDL: CREATE, ALTER , DROP, RENAME, TRUCATE, COMMENT
+-DML: INSERT, UPDATE, DELETE, MERGE, SELECT
+-TCL: COMMIT, ROLLBACK, SAVEPOINT
+-DCL: GRANT, REVOKE
+
+ Transaction : DML의 모음
+
+ insert
+ insert
+ update
+ delete
+
+#SELECT 이해 
+	-검색,조회,질의,....
+	-Queries allow the user to describe desired data
+
+
+
+select empno, ename, sal, job
+from emp;
+
+select sal, sal, sal, sal, --컬럼복제
+from emp;
+
+select sum(sal), avg(sal), max(sal), min(sal) 
+from emp;
+
+select empno, ename, sal, sal*1.3
+from emp;
+
+
+
+select * from DREAM01.friends;
+
+grant select
+on friends 
+to public;
+
+-------------------
+
+#SELECT statement
+
+ *SELECT 문장을 작성하거나 해석할 때 권장 순서(절대실행순서x) 
+
+ SELECT	 	deptno, sum(sal)--4 (mandatory)
+ FROM 		emp		--1 (mandatory)
+ WHERE  	sal >=1000	--2
+ GROUP BY 	deptno		--3
+ HAVING		sum(sal) >=2000	--5
+ ORDER BY	deptno		--6
+ ;
+
+#where절 이해
+ *candidate row를 검증해서 T,F,N 가운데 하나를 리턴하는 절
+ where절이 T를 리턴해야 후보행(candidate row)이 리턴된다.
+
+select *
+from emp
+where sal >=1500;
+
+show array
+set arraysize 1
+
+select *from emp where comm = null;--엉터리
+
+
+and T F N
+T  T  F N
+
+F  F  F F
+
+N  N  F N
+
+or T F N
+T  T T T
+
+F T F N
+
+N T N N
+
+
+select * from emp where comm is null;
+
+select *from emp where sal >= 1500 and job = 'SALESMAN';
+
+select ename, ename, sal, sal * 1.2
+from emp
+where sal >=1000;
+
+
+select ename, lower(ename), sal, sal * 1.2
+from emp
+where sal >=1000;
+
+# Join 
+
+ select * 
+ from emp, dept
+ order by 1; 
+
+ select * 
+ from emp, dept
+ where emp.deptno= dept.deptno
+ order by 1;
+
+select * form salgrades;
+
+select *
+from emp, salgrade
+order by 1;
+
+
+select *
+from emp e, salgrade s
+where e.sal >=s.losal and e.sal <=s.hisal
+order by 1;
+
+select s.grade,count(*), avg(e.sal)
+from emp e, salgrade s
+where e.sal >=s.losal and e.sal <=s.hisal
+group by s.grade
+order by grade desc;
+
+
+*Syntax
+Oracle Syntax
+-Equi join
+-NoonEqui join
+-Self join
+-Outer join
+SQL:1999 Syntax
+
+sekect * from dept
+ from절의 테이블이 2개이상이면 join
+
+
+ select count(*)
+ from(select level as no from dual connect by level <=100),
+(select level as no from dual connect by level <=100),
+(select level as no from dual connect by level <=100);

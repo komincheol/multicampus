@@ -1,0 +1,27 @@
+1)
+CREATE TABLE employees
+  (
+    ID   NUMBER (6) NOT NULL ,
+    NAME VARCHAR2 (50));
+ALTER TABLE employees ADD CONSTRAINT employees_PK PRIMARY KEY ( ID ) ;
+
+CREATE TABLE projects
+  ( no NUMBER (6) NOT NULL ,
+    title VARCHAR2 (50));
+
+ALTER TABLE projects ADD CONSTRAINT projects_PK PRIMARY KEY ( no ) ;
+
+CREATE TABLE work_assignments
+  (
+    DATE_assgnd  DATE ,
+    dur          NUMBER (3) ,
+    employees_ID NUMBER (6) NOT NULL ,
+    projects_no  NUMBER (6) NOT NULL );
+ALTER TABLE work_assignments ADD CONSTRAINT work_assignments_PK PRIMARY KEY ( projects_no, employees_ID ) ;
+ALTER TABLE work_assignments ADD CONSTRAINT work_assignments_employees_FK FOREIGN KEY ( employees_ID ) REFERENCES employees ( ID ) ;
+ALTER TABLE work_assignments ADD CONSTRAINT work_assignments_projects_FK FOREIGN KEY ( projects_no ) REFERENCES projects ( no ) ;
+
+2)
+2)
+create index employee_idx on work_assignments(employees_id);
+create index projects_idx on work_assignments(projects_no);

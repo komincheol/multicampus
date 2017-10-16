@@ -1,0 +1,20 @@
+create or replace procedure prob1
+is
+ TYPE dept_rec_type is record
+(deptno dept.deptno%type, dname dept.dname%type, loc dept.loc%type);
+TYPE emp_rec_type IS RECORD (empno emp.empno%type, ename emp.ename%type, sal emp.sal%type);
+
+TYPE dept_tab_rec_type IS TABLE OF dept_rec_type  INDEX BY PLS_INTEGER;
+TYPE emp_tab_rec_type IS TABLE OF emp_rec_type  INDEX BY PLS_INTEGER;
+v_outer dept_tab_rec_type;  v_inner emp_tab_rec_type;
+begin select * BULK COLLECT INTO v_outer from dept;
+for i in v_outer.first .. v_outer.last loop
+p.p(v_outer(i).deptno ||' '||v_outer(i).dname ||' '||v_outer(i).loc);
+select empno, ename, sal BULK COLLECT INTO v_inner from emp where deptno = v_outer(i).deptno;
+for j in v_inner.first .. v_inner.last loop      p.p(v_inner(j).empno||' '||v_inner(j).ename||' '||v_inner(j).sal);
+    end loop;
+  end loop;
+end;
+/
+
+

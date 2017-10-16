@@ -1,0 +1,3932 @@
+
+============================================
+ 0장 
+============================================
+
+# Recommended Related Training Courses:
+
+  - http://me2.do/xofl9J7W : 한국 오라클 교육센터
+  - http://me2.do/5ojccFYB : Oracle Database 11g: Administration Workshop II Release 2
+  - http://me2.do/FQKvv9yP : Oracle Database 11g: Backup and Recovery Workshop 
+  - http://me2.do/F0BvvEe7 : Oracle Database 11g: Performance Tuning Release 2
+  - http://me2.do/FJRXdpve : Oracle Grid Infrastructure 11g: Manage Clusterware and ASM  
+
+# Related Documents
+
+  - http://me2.do/5BOXXt5k
+  
+# Oracle DBMS Installation
+
+  - Single Instance, Multiple Instance
+  - GI(ASM + Oracle Restart) + Single Instance
+  - GI(ASM + Oracle Clusterware) + Multiple Instance
+
+# Oracle Database 10gR2, 11gR2 Installation On Enterprise Linux 4.0
+
+  - http://gseducation.blog.me/20093164977
+
+# Pre-Built Developer VMs (for Oracle VM VirtualBox)
+
+  http://www.oracle.com/technetwork/community/developer-vm/index.html
+
+============================================
+ 1장 
+============================================
+
+  * http://docs.oracle.com/cd/B10501_01/server.920/a96524/c01_02intro.htm#20385
+    http://docs.oracle.com/cd/E11882_01/server.112/e25789/intro.htm#i68236
+ 
+  * Databse
+  * DBMS
+  * Oracle Database Server = Database + Instance
+
+  * Performance ≒ 수행, 실행, 공연, 성능 ...
+  * Tuning      ≒ 조정, ...
+
+  * Architecture
+  
+    Oracle Server - Database = Datafile + Redo log file + Control file (cf.Other key files)
+                  - Instance = SGA + BGP
+
+    Startup 순서 : shutdown --> nomount --> mount --> open
+                            ↑          ↑        ↑ 
+                             P           C         D,R
+
+    Block(Primary block 또는 Standard block)
+
+    WAL(Write ahead log)
+    Noarchivelog mode / Archivelog mode 
+
+    User process 
+    Server process(= Shadow process, Foreground process)
+    BGP(Background process : PMON, SMON, DBWn, LGWR, CKPT, ARCn, MMON, ADDM, ...)
+
+    Recursive SQL 
+
+    SQL 처리 과정
+
+      - http://docs.oracle.com/cd/E11882_01/server.112/e25789/sqllangu.htm#CHDDAGAA 
+      - Select 수행 순서
+      - DML 수행 순서 + Commit + Instance Recovery (+ DBWn 및 LGWR의 사명)
+
+    DBWR와 LGWR가 내려쓰는 경우              : http://cafe.naver.com/gsinternet/24
+    Mechanics of Instance and Crash Recovery : http://cafe.naver.com/gsinternet/25
+
+  * Logical Storage
+
+    Tablespace - Segment - Extent - Block
+
+    select * from dba_segments where owner = 'SH' and segment_name = 'TIMES';
+    select * from dba_extents  where owner = 'SH' and segment_name = 'TIMES';
+    select * from dba_free_space;
+
+  * 내용 확인 : 용어 이해를 위한 예제이므로 가볍게 여기세요.
+
+    print_table 프로시져 소스코드 : http://cafe.naver.com/gsinternet/157
+                   
+    set serveroutput on
+    exec print_table('select * from v$database')
+    exec print_table('select * from v$instance')
+
+    exec print_table('select * from v$sga')
+    exec print_table('select * from v$bgprocess')
+
+    select * from v$sgastat;
+    select * from v$bgprocess order by 1;
+
+    exec print_table('select * from v$controlfile')
+    exec print_table('select * from v$logfile')
+    exec print_table('select * from v$datafile')
+
+============================================
+ 3장 
+============================================
+
+# Create Databases Manually
+
+  - http://me2.do/5sAooUBd : Creating a Database with the CREATE DATABASE Statement
+
+  0.디렉토리 및 파라미터 파일 생성
+
+   OS] vi /etc/oratab
+
++ASM:/u01/app/oracle/product/11.2.0/grid:N
+orcl:/u01/app/oracle/product/11.2.0/dbhome_1:N
+prod:/u01/app/oracle/product/11.2.0/dbhome_1:N
+
+   OS] rm -rf $ORACLE_BASE/oradata/prod
+   OS] mkdir -p $ORACLE_BASE/oradata/prod
+   OS] ls $ORACLE_BASE/oradata
+
+        orcl  prod
+
+   OS] . oraenv
+
+   ORACLE_SID = [oracle] ? prod
+
+   OS] vi $ORACLE_HOME/dbs/initprod.ora
+ 
+	db_name       = prod
+	instance_name = prod
+	compatible    = 11.2.0
+	processes     = 100
+	
+	undo_management = auto
+	undo_tablespace = undotbs01
+
+	db_cache_size    = 64m
+	shared_pool_size = 72m
+	db_block_size    = 4096
+
+	control_files = ('$ORACLE_BASE/oradata/prod/control01.ctl',
+	                 '$ORACLE_BASE/oradata/prod/control02.ctl')
+
+	remote_login_passwordfile = exclusive
+
+  1.Software 시작
+ 
+   OS] vi + $ORACLE_HOME/sqlplus/admin/glogin.sql 
+
+	define _editor=vi    <-- 마지막줄에 추가해 주세요.
+
+   OS] export ORACLE_SID=prod
+   OS] sqlplus / as sysdba
+   SQL> startup nomount
+   SQL> select instance_name, status from v$instance;
+
+     INSTANCE_NAME                    STATUS
+     -------------------------------- ------------------------
+     prod                             STARTED
+
+   SQL> !ps -ef|grep smon
+
+        oracle   10484     1  0 18:17 ?        00:00:00 asm_smon_+ASM
+	oracle    4556     1  0 15:53 ?        00:00:00 ora_smon_prod
+	oracle    8148     1  0 14:52 ?        00:00:01 ora_smon_orcl
+
+  2.Create database 명령 실행 
+
+   SQL> create database prod
+	logfile group 1 ('$ORACLE_BASE/oradata/prod/redo01_a.log', 
+        	         '$ORACLE_BASE/oradata/prod/redo01_b.log') size 20m,
+	        group 2 ('$ORACLE_BASE/oradata/prod/redo02_a.log', 
+	                 '$ORACLE_BASE/oradata/prod/redo02_b.log') size 20m
+	datafile '$ORACLE_BASE/oradata/prod/system01.dbf' size 200m autoextend on next 20m maxsize unlimited 
+	sysaux datafile '$ORACLE_BASE/oradata/prod/sysaux01.dbf' size 200m autoextend on next 20m maxsize unlimited 
+	undo tablespace undotbs01 datafile '$ORACLE_BASE/oradata/prod/undotbs01.dbf' size 100m autoextend on next 20m maxsize 2G 
+	default temporary tablespace temp tempfile '$ORACLE_BASE/oradata/prod/temp01.tmp' size 20m autoextend on next 20m maxsize 2G;
+
+        cf.vi + $ORACLE_HOME/rdbms/admin/sql.bsq   <-- 확인하고 넘어가세요.
+
+   SQL> !ls -l $ORACLE_BASE/oradata/prod
+   SQL> select instance_name, status from v$instance;
+
+     INSTANCE_NAME                    STATUS
+     -------------------------------- ------------------------
+     prod                             OPEN
+
+  3.필수 Script 수행
+
+   SQL> alter user sys identified by oracle;        -- 기본 암호 : change_on_install
+   SQL> alter user system identified by oracle;     -- 기본 암호 : manager
+   SQL> ed after_db_create.sql
+
+	conn sys/oracle as sysdba
+	@?/rdbms/admin/catalog.sql
+	@?/rdbms/admin/catproc.sql
+
+	conn system/oracle
+	@?/sqlplus/admin/pupbld.sql
+
+   SQL> @ after_db_create.sql
+   SQL> exit
+
+  # Test
+
+   OS] ps -ef|grep smon
+
+	oracle   24145     1  0 18:06 ?        00:00:00 ora_smon_prod
+	oracle   22122     1  0 17:52 ?        00:00:00 ora_smon_orcl
+
+   OS] export ORACLE_SID=orcl
+   OS] sqlplus / as sysdba
+   SQL> startup force
+   SQL> select instance_name from v$instance;
+   SQL> exit
+
+   OS] export ORACLE_SID=prod
+   OS] sqlplus / as sysdba
+   SQL> startup force
+   SQL> select instance_name from v$instance;
+   SQL> exit
+
+ ------------------------------------------------------------------
+  Database를 수동으로 생성한 뒤에 필수적으로 해야하는 설정들
+ ------------------------------------------------------------------
+
+  # Create password file
+
+   OS] ls -l $ORACLE_HOME/dbs/orapw*
+
+	-rw-r-----  1 oracle oinstall 1536  6월  1 17:13 orapworcl
+
+   OS] orapwd file=$ORACLE_HOME/dbs/orapwprod password=nemam entries=5
+
+  # Setting Network
+
+   OS] hostname
+
+   edydr1p0.us.oracle.com
+
+   OS] cd $ORACLE_HOME/network/admin
+   OS] vi listener.ora
+
+L2 =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = edydr1p0.us.oracle.com)(PORT = 1531))
+    )
+  )
+
+SID_LIST_L2 =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = orcl)
+      (ORACLE_HOME = /u01/app/oracle/product/11.2.0/dbhome_1)
+      (GLOBAL_DBNAME = orcl.example.com)
+    )
+    (SID_DESC =
+      (SID_NAME = prod)
+      (ORACLE_HOME = /u01/app/oracle/product/11.2.0/dbhome_1)
+      (GLOBAL_DBNAME = prod)
+    )
+  )
+
+   OS] lsnrctl start L2
+   OS] lsnrctl status L2
+
+   OS] sqlplus system/oracle_4U@localhost:1531/orcl.example.com
+   SQL> exit
+
+   OS] sqlplus system/oracle@localhost:1531/prod
+   SQL> exit
+
+ -----------------------------------------
+  dbcontrol 수동 설정
+ -----------------------------------------
+
+   OS] export ORACLE_SID=prod
+   OS] emca -config dbcontrol db -repos create
+
+	Enter the following information:
+	Database SID: prod
+	Listener port number: 1521
+        Listener ORACLE_HOME [ /u01/app/oracle/product/11.2.0/grid ]: 그냥 Enter
+	Password for SYS user: nemam
+	Password for DBSNMP user: oracle
+	Password for SYSMAN user: oracle
+	Password for SYSMAN user: Email address for notifications (optional): 그냥 Enter
+	Outgoing Mail (SMTP) server for notifications (optional): 그냥 Enter
+	-----------------------------------------------------------------
+
+        ...
+
+	-----------------------------------------------------------------
+	Do you wish to continue? [yes(Y)/no(N)]: Y
+
+   OS] export ORACLE_SID=orcl
+   OS] emctl stop dbconsole
+   OS] emctl start dbconsole
+
+   OS] export ORACLE_SID=prod
+   OS] emctl stop dbconsole
+   OS] emctl start dbconsole
+
+  # Fist Web browser : https://edydr1p0.us.oracle.com:1158/em
+
+    * User Name : sys		
+    * Password  : oracle_4U	
+    Connect As  : SYSDBA
+
+  # Second Web browser : https://edydr1p0.us.oracle.com:5500/em
+
+    * User Name : sys		
+    * Password  : nemam
+    Connect As  : SYSDBA
+
+ -----------------------
+ > Control file 추가   <
+ -----------------------
+
+   OS] . oraenv
+   ORACLE_SID = [orcl] ? prod
+
+   OS] sqlplus / as sysdba
+
+   SQL> startup force
+   SQL> select name from v$controlfile;
+
+	NAME
+	-----------------------------------------------
+	/u01/app/oracle/oradata/prod/control01.ctl
+	/u01/app/oracle/oradata/prod/control02.ctl
+
+   SQL> shutdown immediate
+
+   SQL> !cp /u01/app/oracle/oradata/prod/control01.ctl /u01/app/oracle/oradata/prod/control03.ctl
+   SQL> !vi $ORACLE_HOME/dbs/initprod.ora
+
+	# 아래 파라미터만 수정하세요.
+
+        control_files = ('$ORACLE_BASE/oradata/prod/control01.ctl',
+                         '$ORACLE_BASE/oradata/prod/control02.ctl',
+                         '$ORACLE_BASE/oradata/prod/control03.ctl')
+
+   SQL> create spfile from pfile;
+
+   SQL> startup
+
+   SQL> select name from v$controlfile;
+
+	NAME
+	-----------------------------------------------
+	/u01/app/oracle/oradata/prod/control01.ctl
+	/u01/app/oracle/oradata/prod/control02.ctl
+	/u01/app/oracle/oradata/prod/control03.ctl
+
+ -----------------------
+ > Redo log file 추가  <
+ -----------------------
+
+   SQL> set lines 200
+   SQL> select * from v$log;
+   SQL> select member from v$logfile;
+
+   SQL> alter database add logfile
+       ('/u01/app/oracle/oradata/prod/redo03_a.log', 
+        '/u01/app/oracle/oradata/prod/redo03_b.log') size 10m;
+
+   SQL> alter database add logfile
+       ('/u01/app/oracle/oradata/prod/redo04_a.log', 
+        '/u01/app/oracle/oradata/prod/redo04_b.log') size 10m;
+
+   SQL> alter database add logfile
+        '/u01/app/oracle/oradata/prod/redo05_a.log' size 10m;
+
+   SQL> alter database add logfile member
+        '/u01/app/oracle/oradata/prod/redo05_b.log' to group 5;
+
+   SQL> select * from v$log;
+   SQL> select member from v$logfile;
+
+ -----------------------
+ > Data file 추가      <
+ -----------------------
+
+   SQL> select name from v$datafile
+        union all
+        select name from v$tempfile;
+
+	NAME
+	--------------------------------------------------
+	/u01/app/oracle/oradata/prod/system01.dbf
+	/u01/app/oracle/oradata/prod/undotbs01.dbf
+	/u01/app/oracle/oradata/prod/sysaux01.dbf
+	/u01/app/oracle/oradata/prod/temp01.tmp
+
+   SQL> create tablespace users01 
+        datafile '/u01/app/oracle/oradata/prod/users01.dbf' size 10m;
+
+   SQL> create tablespace users02
+        datafile '/u01/app/oracle/oradata/prod/users02.dbf' size 10m
+        autoextend on next 10m maxsize 200M;
+
+   SQL> set lines 60
+   SQL> desc dba_tablespaces
+
+   SQL> col tablespace_name format a30
+   SQL> select tablespace_name, block_size
+        from dba_tablespaces;
+
+   SQL> create tablespace users03 datafile '/u01/app/oracle/oradata/prod/users03.dbf' size 10m blocksize 8192;
+
+	--> 에러 : ORA-29339 ~
+
+   SQL> !oerr ora 29339
+
+	29339, 00000, "tablespace block size %s does not match configured block sizes"
+
+   SQL> set lines 200
+   SQL> show parameter cache_size
+ 
+   SQL> alter system set db_cache_size = 56M;
+   SQL> alter system set db_8K_cache_size = 4M;
+   SQL> create tablespace users03 datafile '/u01/app/oracle/oradata/prod/users03.dbf' size 10m blocksize 8192;
+
+   SQL> drop tablespace users03 including contents and datafiles;
+
+   SQL> select name from v$datafile
+        union all
+        select name from v$tempfile;
+
+	NAME
+	--------------------------------------------------
+	/u01/app/oracle/oradata/prod/system01.dbf
+	/u01/app/oracle/oradata/prod/undotbs01.dbf
+	/u01/app/oracle/oradata/prod/sysaux01.dbf
+	/u01/app/oracle/oradata/prod/temp01.tmp
+	/u01/app/oracle/oradata/prod/users01.dbf
+	/u01/app/oracle/oradata/prod/users02.dbf
+
+ -----------------------
+ > DB 유저 추가        <
+ -----------------------
+
+   SQL> select username from dba_users;
+
+   SQL> create user suzy
+        identified by hw
+        default tablespace users02
+        temporary tablespace temp
+        quota 5m on users01
+        quota unlimited on users02;
+
+   SQL> grant create session, create table
+        to suzy;
+
+   SQL> conn suzy/hw
+
+   SQL> create table t1 (no number);
+   SQL> select table_name, tablespace_name from user_tables;
+
+   SQL> create table t2 (no number) tablespace users01;
+   SQL> alter table t1 move tablespace users01;
+
+   SQL> select table_name, tablespace_name from user_tables;
+
+ ------------------------
+ > File 이름, 위치 수정 <
+ ------------------------
+
+  - Control file
+
+    SQL> conn / as sysdba
+    SQL> shutdown immediate
+
+    SQL> !mkdir /u01/app/oracle/oradata/disk2
+    SQL> !mv /u01/app/oracle/oradata/prod/control03.ctl /u01/app/oracle/oradata/disk2/con_prod03.ctl
+
+    SQL> !vi $ORACLE_HOME/dbs/initprod.ora
+
+	# 아래 파라미터만 수정하세요.
+        control_files = ('$ORACLE_BASE/oradata/prod/control01.ctl',
+                         '$ORACLE_BASE/oradata/prod/control02.ctl',
+                         '/u01/app/oracle/oradata/disk2/con_prod03.ctl')
+
+    SQL> create spfile from pfile;
+
+    SQL> startup
+    SQL> select name from v$controlfile;
+
+	NAME
+	----------------------------------------------------
+	/u01/app/oracle/oradata/prod/control01.ctl
+	/u01/app/oracle/oradata/prod/control02.ctl
+	/u01/app/oracle/oradata/disk2/con_prod03.ctl
+
+  - Redo log file
+
+    SQL> shutdown immediate
+    SQL> !mv /u01/app/oracle/oradata/prod/redo05* /u01/app/oracle/oradata/disk2
+    SQL> !ls -l /u01/app/oracle/oradata/disk2
+
+	-rw-r-----  1 oracle oinstall  6078464  1월  5 17:17 con_prod03.ctl
+	-rw-r-----  1 oracle oinstall 10486272  1월  5 17:16 redo05_a.log
+	-rw-r-----  1 oracle oinstall 10486272  1월  5 15:44 redo05_b.log
+
+    SQL> startup mount
+
+    SQL> alter database rename file '/u01/app/oracle/oradata/prod/redo05_a.log' 
+                                to '/u01/app/oracle/oradata/disk2/redo05_a.log';
+
+    SQL> alter database rename file '/u01/app/oracle/oradata/prod/redo05_b.log' 
+                                to '/u01/app/oracle/oradata/disk2/redo05_b.log';
+
+    SQL> alter database open;
+    SQL> select member from v$logfile;
+
+  - Datafile
+
+    SQL> select tablespace_name, file_name 
+        from dba_data_files;
+
+    SQL> alter tablespace users02 offline;
+
+    SQL> !mv /u01/app/oracle/oradata/prod/users02.dbf /u01/app/oracle/oradata/disk2/u02.dbf
+
+    SQL> alter database rename file '/u01/app/oracle/oradata/prod/users02.dbf' 
+                                to '/u01/app/oracle/oradata/disk2/u02.dbf';
+
+    SQL> alter tablespace users02 online;
+
+    SQL> col file_name format a60
+    SQL> select tablespace_name, file_name 
+        from dba_data_files;
+
+	TABLESPACE_NAME                FILE_NAME
+	------------------------------ ------------------------------------------------------------
+	SYSTEM                         /u01/app/oracle/oradata/prod/system01.dbf
+	UNDOTBS01                      /u01/app/oracle/oradata/prod/undotbs01.dbf
+	SYSAUX                         /u01/app/oracle/oradata/prod/sysaux01.dbf
+	USERS01                        /u01/app/oracle/oradata/prod/users01.dbf
+	USERS02                        /u01/app/oracle/oradata/disk2/u02.dbf
+
+ ------------------------
+ > Database Mode 수정   <
+ ------------------------
+
+   SQL> archive log list
+
+	Database log mode              No Archive Mode
+	Automatic archival             Disabled
+	Archive destination            /u01/app/oracle/product/11.2.0/dbhome_1/dbs/arch
+	Oldest online log sequence     27
+	Current log sequence           28
+
+   SQL> !mkdir /u01/app/oracle/oradata/arch1
+   SQL> !mkdir /u01/app/oracle/oradata/arch2
+
+   SQL> show parameter log_archive_dest_
+   SQL> alter system set log_archive_dest_1 = 'location=/u01/app/oracle/oradata/arch1/';
+   SQL> alter system set log_archive_dest_2 = 'location=/u01/app/oracle/oradata/arch2/';
+
+   SQL> shutdown immediate
+
+   SQL> startup mount
+   SQL> alter database archivelog;
+   SQL> archive log list
+
+   SQL> alter database open;
+   SQL> !ps -ef|grep arc
+
+	oracle    5147     1  0 14:24 ?        00:00:00 ora_arc0_prod
+	oracle    5149     1  0 14:24 ?        00:00:00 ora_arc1_prod
+	oracle    5151     1  0 14:24 ?        00:00:00 ora_arc2_prod
+
+   SQL> !ls -l /u01/app/oracle/oradata/arch*
+  
+   SQL> alter system switch logfile;
+   SQL> alter system switch logfile;
+
+   SQL> !ls -l /u01/app/oracle/oradata/arch*
+
+	--> 생성된 archived log file을 확인하실 수 있다.
+        --> 이어서 반드시 Whole Database Backup을 하셔야 합니다!!
+
+ ---------------------------
+ > Whole Database Backup   <
+ ---------------------------
+
+ - offline (closed, cold, consistent) 백업
+
+   SQL> shutdown immediate
+
+   SQL> !mkdir /u01/app/oracle/oradata/prod_backup
+   SQL> !cp -R /u01/app/oracle/oradata/prod  /u01/app/oracle/oradata/prod_backup
+   SQL> !cp -R /u01/app/oracle/oradata/disk2 /u01/app/oracle/oradata/prod_backup
+
+   SQL> !ls -R /u01/app/oracle/oradata/prod_backup
+   SQL> exit
+
+ - online (open, hot, inconsistent) 백업
+  
+   OS]sqlplus / as sysdba
+   SQL> startup 
+   SQL> !mkdir /u01/app/oracle/oradata/openbackup
+
+   SQL> alter database backup controlfile to trace as '/u01/app/oracle/oradata/openbackup/control_20120218.sql';
+   SQL> !vi /u01/app/oracle/oradata/openbackup/control_20120218.sql
+
+   SQL> set pages 100
+   SQL> set linesize 300
+
+   SQL> select 'alter tablespace '||tablespace_name||' begin backup;'||chr(10)||
+               '!cp '||file_name||' /u01/app/oracle/oradata/openbackup'||chr(10)||
+               'alter tablespace '||tablespace_name||' end backup;' as commands
+        from dba_data_files;
+
+   SQL> 질의 결과를 복사해서 실행하세요.
+   SQL> exit
+
+ ---------------
+ > Recovery    <
+ ---------------
+
+   - Control file : 1개 손상
+   - Control file : 전부 손상
+
+   - Redo log file : Member 1개 손상
+   - Redo log file : Inactive Group 손상
+   - Redo log file : Current 또는 Active Group 손상 --> 불완전 복구
+
+   - Data file : Temporary        Tablespace의 datafile 손상
+   - Data file : 일반             Tablespace의 datafile 손상
+   - Data file : System 또는 Undo Tablespace의 datafile 손상
+
+----------------------------- 
+ Control file : 1개 손상
+-----------------------------
+
+   OS]$ . oraenv
+  ORACLE_SID = [orcl] ? prod
+
+   OS]$ export NLS_LANG=american_america.us7ascii
+   OS]$ sqlplus / as sysdba
+   SQL> startup force
+   SQL> !rm /u01/app/oracle/oradata/prod/control02.ctl
+
+   SQL> startup force
+
+	ORA-00205: error in identifying control file, check alert log for more info
+
+   SQL> show parameter background_dump
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- -----------------------------------------------
+	background_dump_dest                 string      /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+
+   SQL> !ls /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+   SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_prod.log
+
+	Fri Jan  6 15:24:31 2012
+	ORA-00202: control file: '/u01/app/oracle/oradata/prod/control02.ctl'
+
+   SQL> !cp /u01/app/oracle/oradata/prod/control01.ctl /u01/app/oracle/oradata/prod/control02.ctl
+   SQL> startup force
+
+-----------------------------
+ Control file : 전부 손상
+-----------------------------
+
+   SQL> alter database backup controlfile to trace 
+        as '/u01/app/oracle/oradata/prod_backup/control_20120106.sql';
+
+   SQL> !more /u01/app/oracle/oradata/prod_backup/control_20120106.sql
+
+
+   SQL> select '!rm '||name from v$controlfile;
+
+	'!RM'||NAME
+	--------------------------------------------------------------------------------
+	!rm /u01/app/oracle/oradata/prod/control01.ctl
+	!rm /u01/app/oracle/oradata/prod/control02.ctl
+	!rm /u01/app/oracle/oradata/disk2/con_prod03.ctl
+
+   SQL> !rm /u01/app/oracle/oradata/prod/control01.ctl
+   SQL> !rm /u01/app/oracle/oradata/prod/control02.ctl
+   SQL> !rm /u01/app/oracle/oradata/disk2/con_prod03.ctl
+
+   SQL> startup force
+
+	ORA-00205: error in identifying control file, check alert log for more info
+
+   SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_prod.log
+
+	Fri Jan  6 15:49:56 2012
+	ORA-00202: control file: '/u01/app/oracle/oradata/prod/control01.ctl'
+
+   SQL> !cp /u01/app/oracle/oradata/prod/control02.ctl /u01/app/oracle/oradata/prod/control01.ctl      --> 에러
+   SQL> !cp /u01/app/oracle/oradata/disk2/con_prod03.ctl /u01/app/oracle/oradata/prod/control01.ctl    --> 에러  
+
+   SQL> !vi /u01/app/oracle/oradata/prod_backup/create_control_files.sql
+
+	# /u01/app/oracle/oradata/prod_backup/control_20120106.sql 파일의 내용을 이용해서 만드세요.
+
+	STARTUP NOMOUNT
+
+	CREATE CONTROLFILE REUSE DATABASE "prod" NORESETLOGS  ARCHIVELOG
+	    MAXLOGFILES 16
+	    MAXLOGMEMBERS 2
+	    MAXDATAFILES 30
+	    MAXINSTANCES 1
+	    MAXLOGHISTORY 292
+	LOGFILE
+	  GROUP 1 (
+	    '/u01/app/oracle/oradata/prod/redo01_a.log',
+	    '/u01/app/oracle/oradata/prod/redo01_b.log'
+	  ) SIZE 20M,
+	  GROUP 2 (
+	    '/u01/app/oracle/oradata/prod/redo02_a.log',
+	    '/u01/app/oracle/oradata/prod/redo02_b.log'
+	  ) SIZE 20M,
+	  GROUP 3 (
+	    '/u01/app/oracle/oradata/prod/redo03_a.log',
+	    '/u01/app/oracle/oradata/prod/redo03_b.log'
+	  ) SIZE 10M,
+	  GROUP 4 (
+	    '/u01/app/oracle/oradata/prod/redo04_a.log',
+	    '/u01/app/oracle/oradata/prod/redo04_b.log'
+	  ) SIZE 10M,
+	  GROUP 5 (
+	    '/u01/app/oracle/oradata/disk2/redo05_a.log',
+	    '/u01/app/oracle/oradata/disk2/redo05_b.log'
+	  ) SIZE 10M
+	DATAFILE
+	  '/u01/app/oracle/oradata/prod/system01.dbf',
+	  '/u01/app/oracle/oradata/prod/undotbs01.dbf',
+	  '/u01/app/oracle/oradata/prod/sysaux01.dbf',
+	  '/u01/app/oracle/oradata/prod/users01.dbf',
+	  '/u01/app/oracle/oradata/disk2/u02.dbf'
+	CHARACTER SET US7ASCII
+	;
+	
+	RECOVER	DATABASE
+	ALTER SYSTEM ARCHIVE LOG ALL;
+	ALTER DATABASE OPEN;
+	ALTER TABLESPACE TEMP ADD TEMPFILE '/u01/app/oracle/oradata/prod/temp01.tmp'
+	     SIZE 20971520  REUSE AUTOEXTEND ON NEXT 20971520  MAXSIZE 2048M;
+
+   SQL> shutdown abort
+   SQL> @/u01/app/oracle/oradata/prod_backup/create_control_files.sql
+
+-----------------------------------------------------
+ Redo log file : Member 1개 손상
+-----------------------------------------------------
+
+   SQL>!rm /u01/app/oracle/oradata/prod/redo03_a.log
+
+   SQL> startup force
+
+   SQL> alter system switch logfile;
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+
+   SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_prod.log
+
+	Fri Jan  6 16:50:51 2012
+	ORA-00312: online log 3 thread 1: '/u01/app/oracle/oradata/prod/redo03_a.log'
+
+   SQL> !cp /u01/app/oracle/oradata/prod/redo03_b.log /u01/app/oracle/oradata/prod/redo03_a.log
+
+   SQL> alter system switch logfile;
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+
+   SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_prod.log
+
+	Checkpoint not complete
+	  Current log# 3 seq# 49 mem# 0: /u01/app/oracle/oradata/prod/redo03_a.log
+	  Current log# 3 seq# 49 mem# 1: /u01/app/oracle/oradata/prod/redo03_b.log
+
+-----------------------------------------------------
+ Redo log file : Inactive Group 손상
+-----------------------------------------------------
+
+   SQL> set linesize 200
+   SQL> select * from v$log;
+
+   SQL> alter system checkpoint;
+   SQL> select * from v$log;
+
+   SQL> select min(group#) from v$log where status = 'INACTIVE';
+
+   SQL> column member format a60
+   SQL> select * from v$logfile
+       where GROUP# = (select min(group#) from v$log 
+                       where status = 'INACTIVE');
+
+   SQL> select '!rm '||member from v$logfile
+       where GROUP# = (select min(group#) from v$log 
+                       where status = 'INACTIVE');
+
+   SQL> !rm /u01/app/oracle/oradata/prod/redo□□_a.log     --> □□에 사용되는 번호는 각자 다릅니다.
+   SQL> !rm /u01/app/oracle/oradata/prod/redo□□_b.log
+
+   SQL> startup force
+
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_a.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_b.log'
+
+   SQL> select * from v$log;
+
+	--> 삭제된 그룹이 Inactive 그룹임을 확인하고, 아래와 같은 복구를 수행하기로 결정한다.
+
+   SQL> alter database drop logfile group □;
+   SQL> alter database open;
+
+   SQL> alter database add logfile group □
+       ('/u01/app/oracle/oradata/prod/redo□□_a.log',
+        '/u01/app/oracle/oradata/prod/redo□□_b.log') size 10m;
+
+-----------------------------------------------------
+ Redo log file : Current 또는 Active Group 손상
+-----------------------------------------------------
+
+   SQL> select '!rm '||member from v$logfile
+       where GROUP# = (select min(group#) from v$log 
+                       where status = 'CURRENT');
+
+   SQL> !rm /u01/app/oracle/oradata/prod/redo□□_a.log     --> □□에 사용되는 번호는 각자 다릅니다.
+   SQL> !rm /u01/app/oracle/oradata/prod/redo□□_b.log
+
+   SQL> startup force
+
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_a.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_b.log'
+
+   SQL> select * from v$log;
+
+   SQL> alter database drop logfile group □;
+
+	ORA-01623: log □ is current log for instance prod (thread 1) - cannot drop
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_a.log'
+	ORA-00312: online log □2 thread 1: '/u01/app/oracle/oradata/prod/redo□□_b.log'
+
+	--> 삭제된 그룹이 CURRENT 그룹이므로 아래와 같은 "불완전 복구"를 수행하기로 결정한다.
+
+   SQL> shutdown abort
+   SQL> !cp /u01/app/oracle/oradata/prod_backup/prod/*.dbf  /u01/app/oracle/oradata/prod    --> 모든 datafile 복원
+   SQL> !cp /u01/app/oracle/oradata/prod_backup/disk2/*.dbf /u01/app/oracle/oradata/disk2   --> 모든 datafile 복원 
+
+   SQL> startup mount
+   SQL> recover database;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto        <-- 입력
+
+	...
+
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_b.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo□□_a.log'
+
+	--> 에러가 발생하면서 복구가 중지됩니다.
+
+   SQL> recover database until cancel;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|cancel      <-- 입력
+
+   SQL> alter database open resetlogs;
+   SQL> select status from v$instance;
+
+   SQL> startup force
+
+	--> Whole Backup을 수행해야 합니다.
+
+   SQL> shutdown immediate
+
+   SQL> !cp -R /u01/app/oracle/oradata/prod  /u01/app/oracle/oradata/prod_backup
+   SQL> !cp -R /u01/app/oracle/oradata/disk2 /u01/app/oracle/oradata/prod_backup
+
+------------------------------------------------------------
+ Data file : Temporary Tablespace의 datafile 손상
+------------------------------------------------------------
+
+   OS]$ . oraenv
+  ORACLE_SID = [orcl] ? prod
+
+   OS]$ export NLS_LANG=american_america.us7ascii
+   OS]$ sqlplus / as sysdba
+   SQL> startup
+
+   SQL> alter system switch logfile;
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+   SQL> /
+
+   SQL> conn leehlee/hw
+
+   SQL> alter session set workarea_size_policy = manual;
+   SQL> alter session set sort_area_size = 10;
+   SQL> !rm /u01/app/oracle/oradata/prod/temp01.tmp
+
+   SQL> select * from all_objects a, all_objects b order by 1;
+
+	ORA-01110: data file 201: '/u01/app/oracle/oradata/prod/temp01.tmp'
+
+   SQL> conn / as sysdba
+   SQL> startup force
+   SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_prod.log
+
+	Mon Jan  9 14:30:36 2012
+	Re-creating tempfile /u01/app/oracle/oradata/prod/temp01.tmp
+
+   SQL> !ls -l /u01/app/oracle/oradata/prod/*tmp
+
+------------------------------------------------------------
+ Data file : 일반 Tablespace의 datafile 손상
+------------------------------------------------------------
+
+   SQL> !rm /u01/app/oracle/oradata/prod/users01.dbf
+
+   SQL> startup force
+
+	ORA-01110: data file 4: '/u01/app/oracle/oradata/prod/users01.dbf'
+
+   SQL> alter database datafile 4 offline;
+   SQL> alter database open;
+
+   SQL> !cp /u01/app/oracle/oradata/prod_backup/prod/users01.dbf /u01/app/oracle/oradata/prod
+
+   SQL> recover datafile 4;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- 입력
+
+   SQL> alter database datafile 4 online;
+
+------------------------------------------------------------
+ Data file : System 또는 Undo Tablespace의 datafile 손상
+------------------------------------------------------------
+
+   SQL> !rm /u01/app/oracle/oradata/prod/system01.dbf
+
+   SQL> startup force
+
+	ORA-01110: data file 1: '/u01/app/oracle/oradata/prod/system01.dbf'
+
+   SQL> alter database datafile 1 offline;
+   SQL> alter database open;
+
+	ORA-01147: SYSTEM tablespace file 1 is offline
+	ORA-01110: data file 1: '/u01/app/oracle/oradata/prod/system01.dbf'
+
+   SQL> !cp /u01/app/oracle/oradata/prod_backup/prod/system01.dbf /u01/app/oracle/oradata/prod
+
+   SQL> recover datafile 1;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- 입력
+
+   SQL> alter database open;
+
+	ORA-01147: SYSTEM tablespace file 1 is offline
+	ORA-01110: data file 1: '/u01/app/oracle/oradata/prod/system01.dbf'
+
+   SQL> alter database datafile 1 online;
+   SQL> alter database open;
+
+================================================
+ 4장
+================================================
+
+# port number 확인
+
+  [oracle@ora11gr2 ~]$ more $ORACLE_HOME/install/portlist.ini 
+
+# 파라미터 파일 이해
+
+ [1] pfile 추가 및 원하는 pfile을 이용해서 startup
+
+  [oracle@ora11gr2 ~]$ ls -l $ORACLE_HOME/dbs/*prod.ora
+
+    -rw-r--r--  1 oracle oinstall 384  9월  8 16:14 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initprod.ora
+
+  [oracle@ora11gr2 ~]$ cp /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initprod.ora /home/oracle/mydb.txt
+  [oracle@ora11gr2 ~]$ vi /home/oracle/mydb.txt
+
+	# 아래 파라미터 한 개만 수정하세요.
+
+        processes     = 200
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> shutdown abort
+  SQL> startup pfile=/home/oracle/mydb.txt
+
+  SQL> show parameter processes
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	processes                            integer                200
+
+ [2] spfile 추가 및 원하는 spfile을 이용해서 startup
+
+  SQL> create spfile from pfile;                                                      ==> $ORACLE_HOME/dbs/initprod.ora --> $ORACLE_HOME/dbs/spfileprod.ora
+  SQL> create spfile='/home/oracle/spmydb.txt' from pfile='/home/oracle/mydb.txt';    ==> '/home/oracle/mydb.txt'       --> '/home/oracle/spmydb.txt'
+
+  SQL> !ls -l $ORACLE_HOME/dbs/*prod.ora
+
+	-rw-r--r--  1 oracle oinstall  384  9월  8 16:14 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initprod.ora
+	-rw-r-----  1 oracle oinstall 1536  9월  9 17:46 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/spfileprod.ora
+
+  SQL> !ls -l /home/oracle/*mydb.txt
+
+	-rw-r--r--  1 oracle oinstall  384  9월  9 17:40 /home/oracle/mydb.txt
+	-rw-r-----  1 oracle oinstall 1536  9월  9 17:46 /home/oracle/spmydb.txt
+
+  SQL> startup force                                         => /u01/app/oracle/product/11.2.0/dbhome_1/dbs/spfileprod.ora
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- -----------------------------------------------------------
+	spfile                               string                 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/spfileprod.ora
+
+
+  SQL> startup force pfile=$ORACLE_HOME/dbs/initprod.ora     => /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initprod.ora
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	spfile                               string  
+
+  SQL> startup force pfile=/home/oracle/mydb.txt             => /home/oracle/mydb.txt
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	spfile                               string  
+
+  SQL> startup force pfile=/home/oracle/spmydb.txt           => /home/oracle/spmydb.txt를 사용하지 못하고 에러 발생
+  SQL> startup force spfile=/home/oracle/spmydb.txt          => 에러 
+  SQL> !vi /home/oracle/a.txt
+
+	spfile=/home/oracle/spmydb.txt
+
+  SQL> startup force pfile=/home/oracle/a.txt
+  SQL>  show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	spfile                               string                 /home/oracle/spmydb.txt
+
+# Hidden Parameter
+
+  SQL> ed show_param
+
+	SET LINES 120
+
+	COLUMN PARAMETER FORMAT A40
+	COLUMN DESCRIPTION FORMAT A50 WORD_WRAPPED
+	COLUMN "Session Value" FORMAT A10
+	COLUMN "Instance Value" FORMAT A10
+
+	SELECT A.KSPPINM "Parameter"
+	      ,A.KSPPDESC "Description"
+	      ,B.KSPPSTVL "Session Value"
+	      ,C.KSPPSTVL "Instance Value"
+	FROM   X$KSPPI A
+	      ,X$KSPPCV B
+	      ,X$KSPPSV C
+	WHERE  A.INDX = B.INDX
+	AND    A.INDX = C.INDX
+	AND    translate(A.KSPPINM, '_', '#') LIKE '%&1%';
+
+  SQL> @ show_param optimizer
+  SQL> @ show_param pga
+
+# static parameter vs dynamic parameter 
+
+ - Static parameter
+
+  SQL> show parameter log_buffer
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	log_buffer                           integer                2927616
+
+  SQL> alter system set log_buffer=5855232 scope=both;        --> ORA-02095: specified initialization parameter cannot be modified
+  SQL> alter system set log_buffer=5855232 scope=memory;      --> ORA-02095: specified initialization parameter cannot be modified
+  SQL> alter system set log_buffer=5855232 scope=spfile;      --> startup을 다시 해야 적용됩니다.
+  SQL> startup force
+
+  SQL> show parameter log_buffer
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	log_buffer                           integer                7057408
+
+ - Dynamic parameter
+
+  SQL> show parameter db_cache_size
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	db_cache_size                        big integer            64M
+
+  SQL> alter system set db_cache_size=60 scope=both;          --> 인스턴스와 spfile 모두 변경됩니다.
+  SQL> alter system set db_cache_size=64 scope=memory;        --> 인스턴스만 변경되고 spfile은 변경되지 않습니다.
+  SQL> alter system set db_cache_size=60 scope=spfile;        --> startup을 다시 해야 적용됩니다.
+
+# Restrict Mode
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup restrict force
+  SQL> select INSTANCE_NAME, LOGINS from v$instance;
+
+	INSTANCE_NAME                    LOGINS
+	-------------------------------- --------------------
+	prod                             RESTRICTED
+
+  SQL> alter system disable restricted session;
+
+  SQL> select INSTANCE_NAME, LOGINS from v$instance;
+
+	INSTANCE_NAME                    LOGINS
+	-------------------------------- --------------------
+	prod                             ALLOWED
+
+  SQL> alter system enable restricted session;
+  SQL> startup force
+  SQL> exit
+
+# alert 파일의 내용을 계속 모니터링하려면?
+  
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> show parameter background_dump
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------------------------
+	background_dump_dest                 string                 /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+
+  SQL> !
+
+  [oracle@ora11gr2 ~]$ cd /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+  [oracle@ora11gr2 log]$ ls *.log
+  [oracle@ora11gr2 log]$ vi + alert_prod.log
+
+  [oracle@ora11gr2 log]$ tail -f alert_prod.log
+
+# DDV 및 DPV
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> shutdown abort
+
+  SQL> startup nomount
+  SQL> select * from dba_users;     -- ORA-01219: database not open: queries allowed on fixed tables/views only
+  SQL> select * from v$datafile;    -- ORA-01507: database not mounted
+  SQL> select * from v$sga;
+  
+  SQL> alter database mount;
+  SQL> select * from dba_users;     -- ORA-01219: database not open: queries allowed on fixed tables/views only
+  SQL> select * from v$datafile; 
+
+  SQL> alter database open;
+  SQL> select * from dba_users; 
+  SQL> exit
+
+============================================
+ 6장 
+============================================
+
+-------------------------
+ Server측 설정
+-------------------------
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=orcl
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ cd $ORACLE_HOME/network/admin
+  [oracle@ora11gr2 admin]$ mv listener.ora old_listener.ora
+  [oracle@ora11gr2 admin]$ vi listener.ora
+
+LISTENER =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1))
+      (ADDRESS = (PROTOCOL = TCP)(HOST = hostname)(PORT = 1521))
+    )
+  )
+
+SID_LIST_LISTENER =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = orcl)
+      (ORACLE_HOME = /u01/app/oracle/product/11.2.0/dbhome_1)
+      (GLOBAL_DBNAME = orcl.example.com)
+    )
+    (SID_DESC =
+      (SID_NAME = prod)
+      (ORACLE_HOME = /u01/app/oracle/product/11.2.0/dbhome_1)
+      (GLOBAL_DBNAME = prod)
+    )
+  )
+
+L2 =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = hostname)(PORT = 1621))
+    )
+  )
+
+SID_LIST_L2 =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = prod)
+      (ORACLE_HOME = /u01/app/oracle/product/11.2.0/dbhome_1)
+      (GLOBAL_DBNAME = prod)
+    )
+  )
+
+  [oracle@ora11gr2 admin]$ lsnrctl stop
+  [oracle@ora11gr2 admin]$ lsnrctl start
+  [oracle@ora11gr2 admin]$ lsnrctl start L2
+
+  [oracle@ora11gr2 admin]$ ps -ef|grep lsnr
+
+	oracle   27644     1  0 16:17 ?        00:00:00 /u01/app/oracle/product/11.2.0/dbhome_1/bin/tnslsnr LISTENER -inherit
+	oracle   27664     1  0 16:17 ?        00:00:00 /u01/app/oracle/product/11.2.0/dbhome_1/bin/tnslsnr L2 -inherit
+
+  ** 리스너 추가 실습
+
+     - netmgr --> L3(1721)
+
+       [oracle@ora11gr2 ~]$ 콘솔에 직접 로그인해서 작업을 수행하세요.
+       [oracle@ora11gr2 ~]$ netmgr
+       [oracle@ora11gr2 ~]$ lsnrctl start L3
+
+     - netca  --> L4(1821)
+
+       [oracle@ora11gr2 ~]$ 콘솔에 직접 로그인해서 작업을 수행하세요.
+       [oracle@ora11gr2 ~]$ netca
+
+     - EM     --> L5(1921)
+
+-------------------------
+ Client측 설정
+-------------------------
+
+ - Easy Connect
+
+  C:\Documents and Settings\Administrator> more hw.bat
+
+                set path=E:\ora\instantclient-11.1;%path%
+                sqlplus system/oracle@211.183.3.52:1521/orcl
+
+  C:\Documents and Settings\Administrator> set path=E:\ora\instantclient-11.1;%path%
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@192.168.0.10:1521/orcl    --> 성공
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@192.168.0.10:1521/prod    --> 성공
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@192.168.0.10:1621/orcl    --> 실패
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@192.168.0.10:1621/prod    --> 성공
+
+ - Local Naming 
+
+  C:\Documents and Settings\Administrator> set tns_admin=E:\ora\instantclient-11.1
+  C:\Documents and Settings\Administrator> notepad E:\ora\instantclient-11.1\tnsnames.ora
+
+mydb =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1521))
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1621))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = orcl.examp.e)
+    )
+  )
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@hw
+
+# Service Name vs Instance Name : http://goo.gl/PfJYk
+
+ - 서버측 설정
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> show parameter _name
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	instance_name                        string      prod
+	service_names                        string      prod
+
+  SQL> alter system set service_names=prod,ahaha,melon;
+
+  SQL> !lsnrctl service
+
+ - 클라이언트측 설정
+
+  C:\Documents and Settings\Administrator> set path=E:\ora\instantclient-11.1;%path%
+  C:\Documents and Settings\Administrator> set tns_admin=E:\ora\instantclient-11.1
+  C:\Documents and Settings\Administrator> notepad E:\ora\instantclient-11.1\tnsnames.ora
+
+hw =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1521))
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1621))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SID = prod)
+    )
+  )
+
+ana =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = hostname)(PORT = 1521))
+    (ADDRESS = (PROTOCOL = TCP)(HOST = hostname)(PORT = 1621))
+    (CONNECT_DATA = 
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = prod)
+    )
+  )
+
+OS] sqlplus system/oracle@ana
+SQL> exit
+
+OS] cd $ORACLE_HOME/network/admin
+OS] ls
+
+OS] vi tnsnames.ora
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@hw
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@ana
+
+# Static service registration 및 Dynamic service registration
+
+  [oracle@ora11gr2 ~]$ lsnrctl service L4
+
+	The listener supports no services
+	The command completed successfully
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> show parameter listener
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	local_listener                       string
+	remote_listener                      string
+
+  SQL> !vi $ORACLE_HOME/network/admin/tnsnames.ora
+
+# 아래 내용을 추가하세요.
+
+myL =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1521))
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1821))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = prod)
+    )
+  )
+
+  SQL> alter system set local_listener=myL;
+
+  SQL> !lsnrctl service
+  SQL> !lsnrctl service L4
+
+# Source routing
+
+  1.cman.ora를 이용해서 Connection Manager를 설정
+  2.tnsnames.ora를 적절히 설정
+
+  --> http://blog.naver.com/barcoder/60071872027
+
+# Shared Server
+
+ - 서버측 설정
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+
+  SQL> alter system set dispatchers = '(protocol=tcp)(dispatchers=3)';
+  SQL> alter system set shared_servers = 2;
+
+  SQL> !ps -ef|grep prod
+
+	oracle   10687     1  0 16:22 ?        00:00:00 ora_d000_prod
+	oracle   10689     1  0 16:22 ?        00:00:00 ora_d001_prod
+	oracle   10691     1  0 16:22 ?        00:00:00 ora_d002_prod
+
+	oracle   10695     1  0 16:22 ?        00:00:00 ora_s000_prod
+	oracle   10697     1  0 16:22 ?        00:00:00 ora_s001_prod
+
+  SQL> !lsnrctl service
+
+      "D002" established:0 refused:0 current:0 max:1022 state:ready
+         DISPATCHER <machine: ora11gr2.gsedu.com, pid: 10691>
+         (ADDRESS=(PROTOCOL=tcp)(HOST=ora11gr2.gsedu.com)(PORT=45849))
+      "D001" established:0 refused:0 current:0 max:1022 state:ready
+         DISPATCHER <machine: ora11gr2.gsedu.com, pid: 10689>
+         (ADDRESS=(PROTOCOL=tcp)(HOST=ora11gr2.gsedu.com)(PORT=45848))
+      "D000" established:1 refused:0 current:1 max:1022 state:ready
+         DISPATCHER <machine: ora11gr2.gsedu.com, pid: 10687>
+         (ADDRESS=(PROTOCOL=tcp)(HOST=ora11gr2.gsedu.com)(PORT=45847))
+
+ - 클라이언트측 설정
+ 
+  C:\Documents and Settings\Administrator> set path=E:\ora\instantclient-11.1;%path%
+  C:\Documents and Settings\Administrator> set tns_admin=E:\ora\instantclient-11.1
+  C:\Documents and Settings\Administrator> notepad E:\ora\instantclient-11.1\tnsnames.ora
+
+dd =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SID = orcl)
+    )
+  )
+
+ss =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.10)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = shared)
+      (SID = orcl)
+    )
+  )
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@dd
+  SQL> select username, server from v$session;
+  SQL> exit
+
+  C:\Documents and Settings\Administrator> sqlplus system/oracle@ss
+  SQL> select username, server from v$session;
+  SQL> exit
+
+# Connection Pooling 
+
+  * Session vs Connection
+
+    http://me2.do/xniiAscG
+
+# Database Link 활용하기
+
+  [oracle@ora11gr2 ~]$ vi $ORACLE_HOME/network/admin/tnsnames.ora
+
+o52 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = 211.183.3.52)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = orcl)
+    )
+  )
+
+  [oracle@ora11gr2 ~]$ sqlplus hw10/hw10@o52
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus phi/tiger
+
+  SQL> CREATE DATABASE LINK other_db 
+       CONNECT TO "hw10" 
+       IDENTIFIED BY "hw10"
+       USING 'o52';
+
+  SQL> select * from emp;
+  SQL> select * from emp@other_db;
+  SQL> create synonym other_emp for emp@other_db;
+
+  SQL> select * from other_emp;
+
+  SQL> select * 
+       from other_emp e, dept d
+       where e.deptno = d.deptno;
+
+================================================
+ 7장
+================================================
+
+# OMF : Database Area vs Recovery Area
+
+  [oracle@ora11gr2 ~]$ . oraenv
+  ORACLE_SID = [orcl] ? prod
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+ o Database Area 설정 - 파일 자동 생성 및 자동 삭제
+                      - 명령에 파일 이름을 표현이 필요하지 않음
+                      - 각 서버마다 설정해 두면 관리 편의성이 대폭 향상                   
+
+  SQL> show parameter db_create
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	db_create_file_dest                  string
+	db_create_online_log_dest_1          string
+	db_create_online_log_dest_2          string
+	db_create_online_log_dest_3          string
+	db_create_online_log_dest_4          string
+	db_create_online_log_dest_5          string
+
+  SQL> alter system set db_create_file_dest = '/u01/app/oracle/oradata/prod/';
+  SQL> alter system set db_create_online_log_dest_1 = '/u01/app/oracle/oradata/prod/';
+  SQL> alter system set db_create_online_log_dest_2 = '/u01/app/oracle/oradata/prod/';
+
+  SQL> create tablespace tbs1;	
+  SQL> create tablespace tbs2 datafile '/u01/app/oracle/oradata/prod/tbs2.dbf' size 10m;
+
+  SQL> alter database add logfile;
+  SQL> alter database add logfile group 6 ('/u01/app/oracle/oradata/prod/log_a.log', '/u01/app/oracle/oradata/prod/log_b.log') size 10m;
+
+  SQL> !ls -lR /u01/app/oracle/oradata/prod
+
+  SQL> select name from v$datafile;
+
+	NAME
+	--------------------------------------------------------------------------------
+	/u01/app/oracle/oradata/prod/system01.dbf
+	/u01/app/oracle/oradata/prod/undotbs01.dbf
+	/u01/app/oracle/oradata/prod/sysaux01.dbf
+	/u01/app/oracle/oradata/prod/undotbs02.dbf
+	/u01/app/oracle/oradata/prod/users01.dbf
+	/u01/app/oracle/oradata/prod/users02.dbf
+	/u01/app/oracle/oradata/prod/app_ts01.dbf
+	/u01/app/oracle/oradata/prod/app_ts02.dbf
+	/u01/app/oracle/oradata/prod/prod/datafile/o1_mf_tbs1_7jwwbg8z_.dbf               --> OMF(Oracle Managed File)            
+	/u01/app/oracle/oradata/prod/tbs2.dbf                                             --> UMF(User Managed File)
+
+  SQL> select group#, member from v$logfile;
+
+	    GROUP# MEMBER
+	---------- ----------------------------------------------------------------------
+	         1 /u01/app/oracle/oradata/prod/redo01_a.log
+        	 1 /u01/app/oracle/oradata/prod/redo01_b.log
+        	 2 /u01/app/oracle/oradata/prod/redo02_a.log
+	         2 /u01/app/oracle/oradata/prod/redo02_b.log
+	         3 /u01/app/oracle/oradata/prod/redo03_a.log
+	         3 /u01/app/oracle/oradata/prod/redo03_b.log 
+	         4 /u01/app/oracle/oradata/prod/prod/onlinelog/o1_mf_4_7jwv2bq4_.log       --> OMF(Oracle Managed File)
+        	 4 /u01/app/oracle/oradata/prod/prod/onlinelog/o1_mf_4_7jwv2csv_.log
+	         6 /u01/app/oracle/oradata/prod/log_a.log                                  --> UMF(User Managed File)
+	         6 /u01/app/oracle/oradata/prod/log_b.log 
+
+  SQL> drop tablespace tbs1;	
+  SQL> drop tablespace tbs2 including contents and datafiles;
+
+  SQL> alter database drop logfile group □;
+
+	--> drop 되지 않는다면 아래 명령을 이용해서 inactive 그룹으로 만드세요.
+	alter system switch logfile;
+	alter system checkpoint;
+
+
+  SQL> alter database drop logfile group 6;
+  SQL> !rm /u01/app/oracle/oradata/prod/log_*
+
+  SQL> startup force
+
+  SQL> !ls -lR /u01/app/oracle/oradata/prod
+
+ o Recovery Area 설정 - RMAN 백업 기본 위치
+                      - 공간 관리 자동으로 수행
+
+  SQL> show parameter db_recovery
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	db_recovery_file_dest                string      
+	db_recovery_file_dest_size           big integer 
+
+  SQL> !mkdir /u01/app/oracle/oradata/prod_recovery_area
+  SQL> alter system set db_recovery_file_dest_size = 2G;
+  SQL> alter system set db_recovery_file_dest = '/u01/app/oracle/oradata/prod_recovery_area/';
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ rman target /
+  RMAN> backup  database;
+  RMAN> list backup;
+  RMAN> delete backupset 1;
+  Do you really want to delete the above objects (enter YES or NO)? yes
+
+  RMAN> delete backupset 2;
+  Do you really want to delete the above objects (enter YES or NO)? yes
+
+# Tablespace 관련 개념
+
+  - ASM  vs File System  : Stograge    cf.Raw device
+  - OMF  vs UMF          : File        cf.Database Area vs Recovery Area
+                                       cf.OMF 방식으로 수동 DB 생성 : http://cafe.naver.com/gseducation/1723
+  - LMT  vs DMT          : Extent 
+  - ASSM vs MSSM         : Block
+ 
+  - Permanent  vs Undo, Temporary
+  - Read-write vs Read-only  
+  - Online     vs Offline
+  - Logging    vs Nologging
+
+  - SFT        vs BFT
+
+  - Multple Block Size
+  
+# LMT vs DMT, ASSM vs MSSM 
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+
+  SQL> create tablespace ts1 
+       datafile '/u01/app/oracle/oradata/prod/ts1.dbf' size 10m
+       extent management LOCAL            -- LMT(default)    
+       segment space management AUTO      -- ASSM(default)
+  
+  SQL> create tablespace ts2 
+       datafile '/u01/app/oracle/oradata/prod/ts2.dbf' size 10m
+       extent management LOCAL            -- LMT
+       segment space management MANUAL    -- MSSM
+
+  SQL> create tablespace ts3 
+       datafile '/u01/app/oracle/oradata/prod/ts3.dbf' size 10m
+       extent management DICTIONARY       -- DMT
+       segment space management AUTO      -- ASSM
+
+	--> 에러 : ORA-30572: AUTO segment space management not valid with DICTIONARY extent management
+
+  SQL> create tablespace ts4 
+       datafile '/u01/app/oracle/oradata/prod/ts4.dbf' size 10m
+       extent management DICTIONARY       -- DMT
+       segment space management MANUAL    -- MSSM
+
+  SQL> set pages 100
+  SQL> select TABLESPACE_NAME, CONTENTS, EXTENT_MANAGEMENT, SEGMENT_SPACE_MANAGEMENT 
+       from dba_tablespaces;
+
+	TABLESPACE_NAME                CONTENTS  EXTENT_MAN SEGMEN
+	------------------------------ --------- ---------- ------
+	SYSTEM                         PERMANENT DICTIONARY MANUAL
+	UNDOTBS01                      UNDO      LOCAL      MANUAL
+	SYSAUX                         PERMANENT LOCAL      AUTO
+	TEMP                           TEMPORARY LOCAL      MANUAL
+	UNDOTBS02                      UNDO      LOCAL      MANUAL
+	TEMP_TS                        TEMPORARY LOCAL      MANUAL
+	USERS                          PERMANENT LOCAL      AUTO
+	APP_TS                         PERMANENT LOCAL      AUTO
+	TBS1                           PERMANENT LOCAL      AUTO
+	TS1                            PERMANENT LOCAL      AUTO
+	TS2                            PERMANENT LOCAL      MANUAL
+	TS4                            PERMANENT DICTIONARY MANUAL
+
+
+
+
+
+	--> System Tablespace가 DMT면 LMT, DMT가 모두 가능하고,
+            System Tablespace가 LMT면 LMT만 가능하다.
+	--> DBCA로   DB를 생성하면 System Tablespace가 LMT가 된다.
+            수동으로 DB를 생성하면 System Tablespace가 DMT가 된다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Multple Block Size
+
+  SQL> alter system set db_cache_size=60M;
+  SQL> alter system set db_8k_cache_size=4m;
+  SQL> create tablespace ts8k datafile '/u01/app/oracle/oradata/prod/ts8k.dbf' size 10m blocksize 8k;
+  SQL> select tablespace_name, block_size 
+       from dba_tablespaces;
+
+# ASM + OMF
+
+     모든 Oracle Databse Server 설정을 다음과 같이 한다면...
+     (아래 명령은 참고용입니다. 설정하지 마세요.)
+
+       SQL> alter system set db_create_file_dest         = '+DG1';
+       SQL> alter system set db_create_online_log_dest_1 = '+DG1';
+       SQL> alter system set db_create_online_log_dest_2 = '+DG1';
+
+       SQL> alter system set db_recovery_file_dest_size  = 2G;
+       SQL> alter system set db_recovery_file_dest       = '+DG2';
+
+============================================
+ 8장 
+============================================
+
+  - authentication
+  - profile (cf.resource manager)
+  - role 
+  - create user
+  - grant : privilege, role
+
+---------------------------------
+ User 생성전 확인하는 것들
+---------------------------------
+ 
+  select * from dba_users;
+  select * from dba_tablespaces; 
+
+  select * from dba_sys_privs;
+  select * from dba_sys_privs where grantee in ('CONNECT', 'RESOURCE');
+  select distinct privilege from dba_sys_privs order by 1;
+  select distinct privilege from dba_sys_privs where privilege like '%ROLE%';
+
+  select * from dba_roles;
+  select * from dba_profiles;
+
+---------------------------------
+ Authentication
+---------------------------------
+
+ [1] Database 일반 유저
+
+  - Database 인증
+
+    [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+    [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+    SQL> startup force
+
+    SQL> create user orange 
+         identified by orange;
+
+    SQL> grant create session 
+         to orange;
+
+    SQL> exit
+
+    [oracle@ora11gr2 ~]$ sqlplus orange/orange
+    SQL> show user
+    SQL> exit
+
+  - 운영체제 인증
+
+    [oracle@ora11gr2 ~]$ sqlplus / 
+
+	에러 : ORA-01017: invalid username/password; logon denied
+
+    [oracle@ora11gr2 ~]$ whoami
+
+	oracle
+
+    [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+    SQL> show parameter prefix
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	os_authent_prefix                    string      ops$
+
+    SQL> create user ops$oracle 
+         identified externally;
+
+    SQL> grant create session 
+         to ops$oracle;
+
+    SQL> exit
+
+    [oracle@ora11gr2 ~]$ sqlplus /
+    SQL> show user
+
+	USER is "OPS$ORACLE"
+
+    SQL> conn / as sysdba
+    SQL> drop user ops$oracle;
+    SQL> alter system set os_authent_prefix='' scope=spfile;
+    SQL> startup force
+
+    SQL> create user oracle 
+         identified externally;
+
+    SQL> grant create session 
+         to oracle;
+
+    SQL> select username, password 
+         from dba_users;
+    
+    SQL> exit
+
+    [oracle@ora11gr2 ~]$ sqlplus /
+    SQL> show user
+
+ [2] SYSDBA 유저
+
+  - 운영체제 인증
+
+    [oracle@ora11gr2 ~]$ more /etc/group
+    [oracle@ora11gr2 ~]$ more /etc/passwd
+
+    --> OS 인증을 사용하는 유저 추가   
+
+    [oracle@ora11gr2 ~]$ su - 
+    Password:
+
+    [root@ora11gr2 ~]# useradd -g oinstall -G dba chan
+    [root@ora11gr2 ~]# passwd chan
+
+  	Changing password for user chan.
+	New UNIX password:                   <-- chan 입력
+	Retype new UNIX password:            <-- chan 입력
+
+    [root@ora11gr2 ~]# su - chan
+    [chan@ora11gr2 ~]$ vi .bash_profile
+
+	ORACLE_BASE=/u01/app/oracle; export ORACLE_BASE
+	ORACLE_HOME=$ORACLE_BASE/product/11.2.0/dbhome_1; export ORACLE_HOME
+	ORACLE_SID=prod; export ORACLE_SID
+	PATH=/usr/sbin:$PATH; export PATH
+	PATH=$ORACLE_HOME/bin:$PATH; export PATH
+	NLS_LANG=korean_korea.ko16mswin949; export NLS_LANG
+
+    [chan@ora11gr2 ~]$ . .bash_profile
+    [chan@ora11gr2 ~]$ env|grep ORA
+    [chan@ora11gr2 ~]$ whoami
+
+	chan
+
+    [chan@ora11gr2 ~]$ sqlplus / as sysdba
+    SQL> startup force
+    SQL> select instance_name, status from v$instance;
+    SQL> shutdown abort
+    SQL> exit
+
+    [chan@ora11gr2 ~]$ exit
+    [root@ora11gr2 ~]$ exit
+
+  - Password file 인증
+
+    [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+    [oracle@ora11gr2 ~]$ rm $ORACLE_HOME/dbs/orapwprod
+    [oracle@ora11gr2 ~]$ orapwd file=$ORACLE_HOME/dbs/orapwprod password=murisu entries=5
+
+    OS] sqlplus sys/murisu@ora11gr2.gsedu.com:1521/prod as sysdba
+    SQL> startup force
+
+    SQL> grant sysdba to orange;
+    SQL> select * from v$pwfile_users;
+    SQL> shutdown abort
+    SQL> exit
+
+    OS] sqlplus orange/orange@ora11gr2.gsedu.com:1521/prod
+
+	에러 : ORA-01034: ORACLE not available
+
+    OS] sqlplus orange/orange@ora11gr2.gsedu.com:1521/prod as sysdba
+
+    SQL> startup force
+    SQL> show user
+
+	USER은 "SYS"입니다
+
+    SQL> connect orange/orange@ora11gr2.gsedu.com:1521/prod
+    SQL> show user
+
+	USER is "ORANGE"
+
+    SQL> connect sys/murisu@ora11gr2.gsedu.com:1521/prod as sysdba
+    SQL> revoke sysdba from orange;
+    SQL> exit
+
+     -- EM에서 접속 확인
+
+	User Name  : sys
+	Password   : murisu
+	Connect As : sysdba
+
+---------------------------------
+ Profile
+---------------------------------
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> set linesize 300
+  SQL> set pagesize 100
+  SQL> select * from dba_profiles;
+  SQL> ed ?/rdbms/admin/utlpwdmg.sql
+
+	-- 파일의 가장 마지막 부분의 아래 내용을 주석처리하세요.
+	-- ALTER PROFILE DEFAULT LIMIT
+	-- PASSWORD_LIFE_TIME 60
+	-- PASSWORD_GRACE_TIME 10
+	-- PASSWORD_REUSE_TIME 1800
+	-- PASSWORD_REUSE_MAX UNLIMITED
+	-- FAILED_LOGIN_ATTEMPTS 3
+	-- PASSWORD_LOCK_TIME 1/1440
+	-- PASSWORD_VERIFY_FUNCTION verify_function;
+
+  SQL> @?/rdbms/admin/utlpwdmg.sql
+
+  SQL> create profile dev_prof limit
+        CPU_PER_SESSION           10000
+        CPU_PER_CALL              1000
+        CONNECT_TIME              600
+        IDLE_TIME                 60
+        SESSIONS_PER_USER         3
+        LOGICAL_READS_PER_SESSION 1000
+        LOGICAL_READS_PER_CALL    100
+        PRIVATE_SGA               1024
+        COMPOSITE_LIMIT           default
+        PASSWORD_LIFE_TIME        60
+        PASSWORD_GRACE_TIME       5 
+        PASSWORD_REUSE_MAX        3
+        PASSWORD_REUSE_TIME       30
+        PASSWORD_VERIFY_FUNCTION  verify_function
+        FAILED_LOGIN_ATTEMPTS     3
+        PASSWORD_LOCK_TIME        5/1440;
+
+  SQL> alter system set resource_limit=true;
+
+  SQL> drop user phi cascade;
+  SQL> create user phi 
+       identified by yun_123
+       default tablespace users
+       temporary tablespace temp
+       quota 10m on users
+       quota 10m on app_ts
+       profile dev_prof
+       account unlock
+       PASSWORD EXPIRE;
+
+  SQL> alter user phi profile default;
+  SQL> alter user phi identified by bow;
+  SQL> alter user phi PASSWORD EXPIRE;
+
+  SQL> alter user phi account lock;
+  SQL> alter user phi account unlock;
+  SQL> alter user phi quota 20m on users;
+
+    ----------
+
+  SQL> grant connect, resource     --> 비권장이며 필요할 경우 Role을 만들어서 사용하세요.
+       to phi;
+
+  SQL> create role dev_role;
+
+  SQL> grant CREATE TABLE, CREATE OPERATOR, CREATE TYPE, CREATE CLUSTER, CREATE TRIGGER, 
+             CREATE SESSION, CREATE SEQUENCE, CREATE PROCEDURE, CREATE INDEXTYPE 
+       to dev_role;
+
+  SQL> alter user leehlee quota 10m on users;
+  SQL> create table leehlee.t1 (no number) tablespace users;
+  SQL> grant select, insert, update, delte
+       on leehlee.t1 
+       to dev_role;
+
+  SQL> grant dev_role
+       to phi, james;
+
+  SQL> grant select any table, connect
+       to dev_role;
+
+  SQL> conn phi/bow
+
+	ORA-28001: the password has expired
+
+	Changing password for phi
+	New password:           <-- tiger 입력
+	Retype new password:    <-- tiger 입력
+
+    ----------
+
+  SQL> conn system/oracle
+  SQL> grant dba to phi with admin option;
+
+  SQL> conn phi/tiger
+  SQL> revoke dba from system;
+  SQL> revoke "AQ_ADMINISTRATOR_ROLE" from system;
+  SQL> revoke "MGMT_USER" from "SYSTEM";
+
+  SQL> conn system/oracle
+
+	ORA-01045: user SYSTEM lacks CREATE SESSION privilege; logon denied
+
+  SQL> conn phi/tiger
+  SQL> grant dba to system;
+  SQL> grant "AQ_ADMINISTRATOR_ROLE" to system;
+  SQL> grant "MGMT_USER" to "SYSTEM";
+
+# 유저별 할당된 공간 확인
+
+  SQL> set lines 200
+  SQL> select * from dba_ts_quotas;
+
+============================================
+ 9장 
+============================================
+
+# 분류
+
+ - http://me2.do/FHBXi3pA
+
+ - Exclusive : I have it and you can not have it.
+   Share     : I have it and you can share it with me.
+               But if you try to get it exclusively, 
+               I will not let you.
+
+ - Lock Mode : None, Null, RS, RX, S, SRX, X
+                0     1    2   3   4   5   6
+
+ - v$lock 및 v$resource
+
+# 기본 예제
+
+  --------------------------      --------------------------
+   세션 1                          세션 2
+  --------------------------      --------------------------
+
+  - 읽기 일관성
+
+  drop table t_book purge;
+
+  create table t_book
+  (no number,
+   name varchar2(10));
+
+  insert into t_book
+  values (1000, 'AtoZ');
+
+  insert into t_book
+  values (2000, 'Lion');
+
+  select * from t_book;
+
+				  select * from t_book;
+
+  commit;
+
+				  select * from t_book;
+
+  - Lock
+
+  update t_book
+  set name = 'Zoo'
+  where no = 1000;
+
+  select * from t_book;
+
+				  update t_book
+				  set name = 'Zoo'
+				  where no = 1000;
+				  |wait!
+  rollback;
+
+				  rollback;
+
+  - Dead Lock
+
+  update t_book
+  set name = 'Zoo'
+  where no = 1000;
+
+				  update t_book
+				  set name = 'Tiger'
+				  where no = 2000;
+				  
+  update t_book
+  set name = 'Tiger'
+  where no = 2000;
+  |wait!
+				  update t_book
+				  set name = 'Zoo'
+				  where no = 1000;
+				  |wait!
+
+  ORA-00060: deadlock detected 
+  while waiting for resource
+
+  rollback;
+
+				  1 row updated.
+
+				  rollback;
+
+# v$lock 및 v$resource
+
+  [session 0]
+
+    SQL> ed lock.sql
+
+       select * from v$resource where type in ('TM', 'TX');
+       select * from v$lock where type in ('TM', 'TX');
+
+    SQL> @lock
+
+  [session 1]
+
+    OS] sqlplus scott/tiger
+
+    SQL> drop table t1 purge;
+
+    SQL> create table t1 
+         as
+         select empno, sal 
+         from emp;
+
+    SQL> update t1 
+         set sal = 1000 
+         where empno = 7788;
+
+  [session 0]
+
+    SQL> @lock
+
+  [session 2]
+
+    SQL> update t1 
+         set sal = 2000 
+         where empno = 7900;
+
+  [session 0]
+
+    SQL> @lock
+
+  [session 3]
+
+    SQL> update t1 
+         set sal = 1500 
+         where empno = 7788;
+
+  [session 0]
+
+    SQL> @lock
+
+  [session 4]
+
+    SQL> alter table t1
+         add (col1 number);
+ 
+  [session 0]
+
+    SQL> @lock
+
+============================================
+ 10장 
+============================================
+
+# MVCC
+
+  http://terms.co.kr/MVCC.htm
+
+# AUM
+
+  SQL> create undo tablespace 이름 datafile '...';
+  SQL> alter system set undo_management = auto;
+  SQL> alter system set undo_tablespace = 이름;
+  SQL> show parameter undo
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	undo_management                      string      AUTO
+	undo_retention                       integer     900
+	undo_tablespace                      string      UNDOTBS02
+
+# 관련 쿼리
+
+  select * from dba_rollback_segs;
+  select * from v$rollstat;
+
+  select * from dba_undo_extents;
+
+============================================
+ 11장 
+============================================
+
+ - Mandatory auditing          : alert_SID.log, ?/rdbms/audit 
+ - Standard database auditing  : audit_trail 파라미터 및 audit 명령
+ - Value-based auditing        : 트리거
+ - Fine-grained auditing (FGA) : dbms_fga 패키지
+ - DBA auditing                : sys 감사
+
+# Standard database auditing
+
+  [oracle@ora11gr2 audit]$ export ORACLE_SID=prod
+  [oracle@ora11gr2 audit]$ sqlplus / as sysdba
+  SQL> show parameter audit_trail
+
+	NAME                                 TYPE        VALUE
+	------------------------------------ ----------- ------------------------------
+	audit_trail                          string      NONE
+
+  SQL> alter system set audit_trail=db scope=spfile;
+  SQL> startup force
+
+  SQL> audit table;               --> Statement auditing
+  SQL> audit select any table;    --> System-privilege auditing
+  SQL> audit update on phi.t1;    --> Object-privilege auditing
+
+  SQL> conn system/oracle
+  SQL> create table t2012 (no number);
+  SQL> select * from phi.t1;
+  SQL> update phi.t1 set c2=200 where c1=2001;
+  SQL> commit;
+
+  - Query로 확인하세요.
+
+    select * from DBA_AUDIT_OBJECT;
+    select * from dba_audit_trail;
+
+  SQL> conn / as sysdba
+
+  SQL> noaudit table; 
+  SQL> noaudit select any table;  
+  SQL> noaudit update on phi.t1;  
+
+  SQL> alter system set audit_trail=none scope=spfile;
+  SQL> startup force
+
+============================================
+ 12장, 13장
+============================================
+
+# 용어
+
+  o Performance?
+
+  o Tuning?
+
+  o Server Tuning?
+
+	(진단 결과를 해석할 능력이 있으면서) 
+	목표에 맞는 Performance가 발휘되도록 
+	시스템의 여러 요소를 조절해 가는 과정
+
+  o SQL Tuning?
+
+	(특정 SQL이 처리되는 가장 좋은 경로를 알고 있으면서)
+	optimizer가 최적의 실행계획을 선택하도록 유도하는 과정.
+
+	- optimizer statistics 관리 : dbms_stats 패키지
+	- index                     : 생성과 활용
+	- 대안적 저장구조           : partitioned table, clustered table, IOT, MView ...
+	- 파라미터                  : optimizer_*** 및 일반 파라미터
+	- Hint                      : Good, Gray, Bad 같은 분류를 하기도 합니다. : http://goo.gl/y23g8
+	- SQL 재작성                : 꾸준한 SQL 작성 능력 향상 계획이 필요합니다.
+	- 기타                      : STA, SAA, TCF, Stored outline, SQL Profile ...
+
+
+
+
+
+# STATISTICS 분류
+
+   o Optimizer Statistics : DBA_***  --> 노력하세요 --> DBMS_STATS 패키지 --> 11gNF : gather_stats_job
+
+	~ Database stats 
+
+	    o GATHER_DATABASE_STATS 
+	    o GATHER_DICTIONARY_STATS
+	    o GATHER_FIXED_OBJECTS_STATS
+	    o GATHER_SCHEMA_STATS 
+	    o GATHER_TABLE_STATS
+	    o GATHER_INDEX_STATS
+
+	~ System stats
+
+	    o GATHER_SYSTEM_STATS
+
+   o Performance Statistics : V$***  --> 즐기세요   --> 누적,휘발 문제    --> user-managed snapshot 
+                                                                          --> utlbstat.sql 및 utlestat.sql 
+                                                                          --> statspack 
+                                                                          --> 11gNF : AWR + MMON + ADDM,ASH
+
+	~ Activity : v$statname, v$sysstat, v$sesstat, v$mystat
+	~ Wait     : v$event_name, v$system_event, v$session_event, v$session(v$session_wait) 
+	~ Others   : v$latch, v$lock, v$sgastat, v$pgastat, v$sql, v$libarycache, v$filestat, ...
+
+       (1) Activity
+
+	v$statname : activity 관련 지표 설명 : http://goo.gl/tw678
+	v$sysstat  : 인스턴스 시작 이후 있었던 모든 세션의 activity 누적
+	v$sesstat  : 현재 연결중인 각 세션의 activity 누적
+	v$mystat   : 현재 세션의 activity 누적
+
+	select * from v$statname;
+	select * from v$statname where class = 2;
+	select * from v$statname where class = 8;
+ 
+	select * from v$sysstat;
+	select * from v$sysstat where class = 2;
+	select * from v$sysstat where class = 8;
+
+	select * from v$sesstat;
+
+	select * from v$sysstat where statistic# = 11;
+	select * from v$sesstat where statistic# = 11 order by value desc;
+
+	select * from v$mystat;
+	select * from v$sesstat where sid = userenv('sid');
+
+       (2) Wait
+
+	v$event_name    : wait 관련 지표 설명 : http://goo.gl/qnNRX
+	v$system_event  : 인스턴스 시작 이후 경험한 모든 wait 누적
+	v$session_event : 현재 연결중인 각 세션이 경험한 wait 누적 
+	v$session (또는 v$session_wait) : 현재 각 세션의 wait 누적
+
+	--> Wait? Syscall? http://carymillsap.blogspot.com/2009/02/dang-it-people-theyre-syscalls-not.html
+
+	select * from v$event_name where name like 'db file%';
+
+	select * from v$event_name;
+	select * from v$event_name where wait_class = 'Idle';
+	select wait_class, count(*) from v$event_name group by wait_class order by 1;
+	select * from v$event_name where name like 'enq: TX%'
+
+	select * from v$system_event;   --> 경험한 wait만 
+	select * from v$session_event; 
+	select * from v$session_event where sid = userenv('sid');
+	select * from v$session;
+
+       (3) Others
+
+	select * from v$fixed_table
+	where name like 'V$%';
+
+	select * from v$fixed_view_definition 
+	order by view_name;
+
+# Metric 
+  
+  Performance statistics : ex> physical reads 지표
+   ↓
+  Metric                 : ex> physical reads/초당, physical reads/tx
+   ↓
+  Server Alert           : Alerts are notifications of when a database is in an undesirable state and needs your attention.
+
+# Alert
+
+  -- Tool Alert   (Pull Model)
+  -- Server Alert (Push Model) --> Metric-based Alert
+                               --> Event-based Alert
+
+# Statistics 이해
+
+[1] Optimizer Statistics 
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=orcl
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> alter user scott identified by tiger account unlock;
+
+  SQL> conn scott/tiger
+  SQL> insert into emp select * from emp;            --> 에러
+
+  SQL> alter table emp disable constraint PK_EMP;
+  SQL> insert into emp select * from emp;
+  SQL> insert into emp select * from emp;
+  SQL> commit;
+
+  SQL> select * from emp;
+  SQL> select table_name, NUM_ROWS, BLOCKS, AVG_ROW_LEN from user_tables;
+
+	TABLE_NAME                                                     NUM_ROWS     BLOCKS AVG_ROW_LEN
+	------------------------------------------------------------ ---------- ---------- -----------
+	DEPT
+	EMP                                                                  14          5          37
+	BONUS
+	SALGRADE
+
+  SQL> desc dbms_stats
+  SQL> exec dbms_stats.gather_table_stats(user, 'EMP')
+
+  SQL> select table_name, NUM_ROWS, BLOCKS, AVG_ROW_LEN from user_tables;
+
+	TABLE_NAME                                                     NUM_ROWS     BLOCKS AVG_ROW_LEN
+	------------------------------------------------------------ ---------- ---------- -----------
+	DEPT
+	EMP                                                                  56          5          37
+	BONUS
+	SALGRADE
+
+  SQL> delete from emp e
+       where rowid > (select min(rowid) from emp 
+                      where empno = e.empno);
+
+  SQL> exec dbms_stats.gather_table_stats(user, 'EMP')
+  SQL> select table_name, NUM_ROWS, BLOCKS, AVG_ROW_LEN from user_tables;
+
+	TABLE_NAME                                                     NUM_ROWS     BLOCKS AVG_ROW_LEN
+	------------------------------------------------------------ ---------- ---------- -----------
+	DEPT
+	EMP                                                                  14          5          37
+	BONUS
+	SALGRADE
+
+[2] Performance Statistics 
+
+  (1) user-managed snapshot 
+
+	[oracle@ora11gr2 ~]$ export ORACLE_SID=orcl
+	[oracle@ora11gr2 ~]$ sqlplus / as sysdba
+
+	SQL> create table scott.my$sysstat as select 0 no, a.* from v$sysstat a where 1=2;
+	SQL> insert into  scott.my$sysstat select 1 no, a.* from v$sysstat a;
+	SQL> insert into  scott.my$sysstat select 2 no, a.* from v$sysstat a;
+	SQL> insert into  scott.my$sysstat select 3 no, a.* from v$sysstat a;
+	SQL> insert into  scott.my$sysstat select 4 no, a.* from v$sysstat a;
+	SQL> commit;
+
+	SQL> col name format a40
+	SQL> set pause on
+	SQL> select * from scott.my$sysstat order by STATISTIC#, no;
+	SQL> exit
+
+  (2) utlbstat.sql 및 utlestat.sql 
+
+	[oracle@ora11gr2 ~]$ cd $ORACLE_HOME/rdbms/admin
+	[oracle@ora11gr2 admin]$ ls utl*stat.sql
+	[oracle@ora11gr2 admin]$ vi utlbstat.sql     --> stats를 저장할 테이블 생성, 첫번째 snapshot 생성
+	[oracle@ora11gr2 admin]$ vi utlestat.sql     --> 두번째 snapshot 생성, summary 테이블 생성, report 생성, stats를 저장하고 있는 테이블 삭제
+
+  (3) statspack 
+
+	** http://download.oracle.com/docs/cd/B10501_01/server.920/a96533/statspac.htm#34837
+
+	[oracle@ora11gr2 admin]$ ls sp*
+	[oracle@ora11gr2 admin]$ more spcreate.sql
+	[oracle@ora11gr2 admin]$ more spauto.sql
+	[oracle@ora11gr2 admin]$ more spreport.sql
+
+	[oracle@ora11gr2 admin]$ sqlplus / as sysdba
+	SQL> @spcreate.sql
+	SQL> show user
+
+	SQL> col object_name format a40
+	SQL> select object_name, object_type from user_objects order by 2, 1;
+	
+	SQL> desc statspack
+
+		- PROCEDURE SNAP
+		- FUNCTION SNAP RETURNS NUMBER(38)
+
+	SQL> exec statspack.snap
+	SQL> exec statspack.snap
+
+	SQL> var sn number
+	SQL> exec :sn := statspack.snap
+	SQL> print sn
+
+	SQL> exec :sn := statspack.snap
+	SQL> exec :sn := statspack.snap
+
+	SQL> @spreport.sql
+ 
+	--> 생성된 보고를 분석해서 문제의 원인과 해결책을 찾아내셔야 합니다.
+	--> http://orapybubu.blog.me/40014540506
+
+  (4) AWR + MMON + ADDM
+
+	--> AWR은 sys 소유의 테이블들을 지칭하며, 이 테이블들은 sysaux 테이블스페이스에 있습니다.
+
+	--> EM에서 sysaux 테이블스페이스의 Occupants를 클릭하셔서 AWR을 확인하세요.
+	--> EM에서 Automatic Workload Repository를 클릭하셔서 snapshot을 확인하세요.
+	--> EM에서 Advisor Central 클릭하셔서 ADDM 분석 결과를 확인하세요.
+
+================================================
+ 17장 Moving Data
+================================================
+
+ - SQL Loader
+ - Data Pump (cf.exp/imp)
+ - External table  - ORACLE_LOADER   : 9iNF
+                   - ORACLE_DATAPUMP : 10gNF
+
+# SQL*Loader
+
+  http://download.oracle.com/docs/cd/B14117_01/server.101/b10825/ldr_cases.htm#i1008607
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=orcl
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+  SQL> conn scott/tiger
+  SQL> !rm a.txt
+  SQL> !vi a.txt
+
+7782 CLARK      MANAGER   7839  2572.50          10 
+7839 KING       PRESIDENT       5500.00          10 
+7934 MILLER     CLERK     7782   920.00          10 
+7566 JONES      MANAGER   7839  3123.75          20 
+7499 ALLEN      SALESMAN  7698  1600.00   300.00 30 
+7654 MARTIN     SALESMAN  7698  1312.50  1400.00 30 
+7658 CHAN       ANALYST   7566  3450.00          20 
+7654 MARTIN     SALESMAN  7698  1312.50  1400.00 30
+
+  SQL> !vi a.ctl
+
+LOAD DATA
+INFILE 'a.txt'
+INTO TABLE t1
+      (empno          POSITION(01:04)   INTEGER EXTERNAL,
+       ename          POSITION(06:15)   CHAR,
+       job            POSITION(17:25)   CHAR,
+       mgr            POSITION(27:30)   INTEGER EXTERNAL,
+       sal            POSITION(32:39)   DECIMAL EXTERNAL,
+       comm           POSITION(41:48)   DECIMAL EXTERNAL,
+       deptno         POSITION(50:51)   INTEGER EXTERNAL)
+
+  SQL> drop table t1 purge;
+  SQL> create table t1 
+       as select * from emp where 1=2;
+
+  SQL> select * from t1;
+
+  SQL> !sqlldr USERID=scott/tiger CONTROL=a.ctl
+
+  SQL> select * from t1;
+
+# exp/imp vs Data Pump 
+
+  C:\Documents and Settings\user> exp scott/tiger@192.168.179.10:1521/orcl file=emp.dmp tables=emp
+  C:\Documents and Settings\user> dir emp*
+
+	2011-11-18  오후 03:19            10,240 emp.dmp
+
+  C:\Documents and Settings\user> sqlplus system/oracle@192.168.179.10:1521/orcl
+  SQL> select * from dba_directories;
+  SQL> grant read, write 
+       on directory DATA_PUMP_DIR 
+       to scott;
+  SQL> exit;
+
+  C:\Documents and Settings\user> expdp scott/tiger@192.168.179.10:1521/orcl   directory=DATA_PUMP_DIR dumpfile=emp.dmp  tables=emp
+  C:\Documents and Settings\user> expdp system/oracle@192.168.179.10:1521/orcl directory=DATA_PUMP_DIR dumpfile=full.dmp full=y job_name=exp_full_job1
+
+	객체 유형 DATABASE_EXPORT/CONTEXT 처리 중
+	객체 유형 DATABASE_EXPORT/SCHEMA/PUBLIC_SYNONYM/SYNONYM 처리 중
+	...
+
+	--> Ctrl+C를 이용해서 명령 command-line interface로 이동합니다.
+
+  Export> stop_job
+  이 작업을 정지하겠습니까([예]/아니오): enter
+
+  C:\Documents and Settings\user> sqlplus system/oracle@192.168.179.10:1521/orcl
+  SQL> select table_name from user_tables where table_name like 'EXP%';
+
+	TABLE_NAME
+	------------------------------------------------------------
+	EXP_FULL_JOB1
+
+  SQL> exit
+
+  C:\Documents and Settings\user> expdp system/oracle@192.168.179.10:1521/orcl attach=EXP_FULL_JOB1
+  Export> help
+
+  Export> PARALLEL=2
+  Export> START_JOB
+  Export> CONTINUE_CLIENT
+
+# External table
+
+  [oracle@ora11gr2 ~]$ sqlplus system/oracle
+  SQL> grant read, write on directory data_pump_dir to hr;
+  SQL> CREATE TABLE dept_move
+       ORGANIZATION EXTERNAL
+       (
+        TYPE ORACLE_DATAPUMP
+        DEFAULT DIRECTORY data_pump_dir
+        LOCATION ('dept_move.dmp')
+        )
+        AS SELECT * FROM scott.dept;
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ sqlplus hr/hr
+  SQL> CREATE TABLE dept
+       (DEPTNO NUMBER(2), DNAME VARCHAR2(14), LOC VARCHAR2(13))
+       ORGANIZATION EXTERNAL
+       (
+        TYPE ORACLE_DATAPUMP
+        DEFAULT DIRECTORY data_pump_dir
+        LOCATION ('dept_move.dmp')
+        );
+
+  SQL> select * from dept;
+  SQL> select * from user_external_tables
+
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+▒                                              ▒
+▒ BACKUP AND RECOVERY (User-managed)           ▒
+▒                                              ▒
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+
+ ------------------------
+ > Failure 유형 및 HAA  <
+ ------------------------
+ 
+    o Statement failure    : DBA 
+    o User process failure : PMON
+    o Network failure      : Network 관리자
+    o User error           : DBA
+    o Instance failure     : SMON
+    o Media failure        : DBA
+
+  - HAA : 다운타임의 원인과 해결책들
+
+    o http://gseducation.blog.me/20104367973
+
+ ----------------------
+ > Database 수동 생성 <
+ ----------------------
+
+  0.디렉토리 및 파라미터 파일 생성
+
+  OS] rm -rf $ORACLE_BASE/oradata/brdb
+  OS] mkdir $ORACLE_BASE/oradata/brdb
+  OS] ls $ORACLE_BASE/oradata
+
+        brdb  orcl
+
+  OS] vi $ORACLE_HOME/dbs/initbrdb.ora
+
+	db_name       = brdb
+	instance_name = brdb
+	compatible    = 11.2.0
+	processes     = 100
+	
+	undo_management = auto
+	undo_tablespace = undotbs01
+
+	db_cache_size    = 64m
+	shared_pool_size = 72m
+	db_block_size    = 4096
+
+	control_files = ('$ORACLE_BASE/oradata/brdb/control01.ctl',
+	                 '$ORACLE_BASE/oradata/brdb/control02.ctl')
+
+	remote_login_passwordfile = exclusive
+
+  1.Software 시작
+ 
+   OS] vi $ORACLE_HOME/sqlplus/admin/glogin.sql
+
+	define _editor=vi  --> 마지막줄에 추가해 주세요.
+
+   OS] export ORACLE_SID=brdb
+   OS] sqlplus / as sysdba
+   SQL> startup nomount
+   SQL> select instance_name, status from v$instance;
+
+     INSTANCE_NAME                    STATUS
+     -------------------------------- ------------------------
+     brdb                             STARTED
+
+  2.Create database 명령 실행 
+
+   SQL> create database brdb
+	logfile group 1 ('$ORACLE_BASE/oradata/brdb/redo01_a.log', 
+        	         '$ORACLE_BASE/oradata/brdb/redo01_b.log') size 20m,
+	        group 2 ('$ORACLE_BASE/oradata/brdb/redo02_a.log', 
+	                 '$ORACLE_BASE/oradata/brdb/redo02_b.log') size 20m
+	datafile '$ORACLE_BASE/oradata/brdb/system01.dbf' size 200m autoextend on next 20m maxsize unlimited 
+	sysaux datafile '$ORACLE_BASE/oradata/brdb/sysaux01.dbf' size 200m autoextend on next 20m maxsize unlimited 
+	undo tablespace undotbs01 datafile '$ORACLE_BASE/oradata/brdb/undotbs01.dbf' size 100m autoextend on next 20m maxsize 2G 
+	default temporary tablespace temp tempfile '$ORACLE_BASE/oradata/brdb/temp01.tmp' size 20m autoextend on next 20m maxsize 2G;
+
+	cf.다음 파일의 내용을 확인해 보세요.
+
+	   vi $ORACLE_HOME/rdbms/admin/sql.bsq
+
+   SQL> select instance_name, status from v$instance;
+
+     INSTANCE_NAME                    STATUS
+     -------------------------------- ------------------------
+     brdb                             OPEN
+
+  3.필수 Script 수행
+
+   SQL> alter user sys identified by oracle;        -- change_on_install
+   SQL> alter user system identified by oracle;     -- manager
+   SQL> ed after_db_create.sql
+
+	conn sys/oracle as sysdba
+	@?/rdbms/admin/catalog.sql
+	@?/rdbms/admin/catproc.sql
+
+	conn system/oracle
+	@?/sqlplus/admin/pupbld.sql
+
+   SQL> @ after_db_create.sql
+   SQL> exit
+
+  [oracle@ora11gr2 ~]$ orapwd file=/u01/app/oracle/product/11.2.0/dbhome_1/dbs/orapwbrdb password=saturday entries=5
+
+  # Test
+
+   [oracle@ora11gr2 ~]$ ps -ef|grep smon
+
+	oracle   24145     1  0 18:06 ?        00:00:00 ora_smon_brdb
+	oracle   22122     1  0 17:52 ?        00:00:00 ora_smon_orcl
+
+   [oracle@ora11gr2 ~]$ vi /etc/oratab
+
+	orcl:/u01/app/oracle/product/11.2.0/dbhome_1:N
+	brdb:/u01/app/oracle/product/11.2.0/dbhome_1:N
+
+ ----------------------
+ > Database mode 수정 <
+ ----------------------
+
+  [oracle@ora11gr2 ~]$ export NLS_LANG=american_america.us7ascii
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> create spfile from pfile;
+  SQL> startup force
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ------------------------------
+	spfile                               string                 /u01/app/oracle/product/11.2.0
+	                                                            /dbhome_1/dbs/spfilebrdb.ora
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> archive log list
+
+	Database log mode              No Archive Mode
+	Automatic archival             Disabled
+	Archive destination            /u01/app/oracle/product/11.2.0/dbhome_1/dbs/arch
+	Oldest online log sequence     47
+	Current log sequence           50
+
+  SQL> show parameter log_archive_format  --> default 값 유지하세요.
+  SQL> show parameter log_archive_dest    --> 2군데를 아래처럼 설정하세요.
+
+  SQL> !mkdir /u01/app/oracle/oradata/brdb_arch1
+  SQL> !mkdir /u01/app/oracle/oradata/brdb_arch2
+
+  SQL> alter system set log_archive_dest_1 = 'location=/u01/app/oracle/oradata/brdb_arch1/';
+  SQL> alter system set log_archive_dest_2 = 'location=/u01/app/oracle/oradata/brdb_arch2/'; 
+
+  SQL> shutdown immediate
+  SQL> startup mount
+  SQL> alter database archivelog;
+
+  SQL> archive log list
+
+	데이터베이스 로그 모드        아카이브 모드   --> Mode
+	자동 아카이브                 사용            --> arcN 프로세스 자동 시작
+	아카이브 대상                 /u01/app/oracle/oradata/brdb_arch2/
+	가장 오래된 온라인 로그 순서  47
+	아카이브할 다음 로그          50
+	현재 로그 순서                50
+
+  SQL> alter database open;
+  SQL> !ps -ef|grep brdb
+
+	oracle   31761     1  0 15:02 ?        00:00:00 ora_arc0_brdb
+	oracle   31763     1  0 15:02 ?        00:00:00 ora_arc1_brdb
+	oracle   31765     1  0 15:02 ?        00:00:00 ora_arc2_brdb
+
+  SQL> !ls -lR /u01/app/oracle/oradata/brdb_arch*
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !ls -lR /u01/app/oracle/oradata/brdb_arch*
+
+ -------------------------
+ > Whole Database Backup <
+ -------------------------
+
+ - offline (closed, cold, consistent) 백업
+
+  SQL> !mkdir /u01/app/oracle/oradata/dontouch
+  SQL> shutdown immediate
+
+  SQL> !cp -R /u01/app/oracle/oradata/brdb/* /u01/app/oracle/oradata/dontouch
+  SQL> !ls -lR /u01/app/oracle/oradata/dontouch
+  SQL> exit
+
+ - online (open, hot, inconsistent) 백업
+  
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup 
+  SQL> !mkdir /u01/app/oracle/oradata/openbackup
+
+  SQL> alter database backup controlfile to trace as '/u01/app/oracle/oradata/openbackup/control_20120218.sql';
+  SQL> !vi /u01/app/oracle/oradata/openbackup/control_20120218.sql
+
+  SQL> set pages 100
+  SQL> set linesize 300
+
+  SQL> select 'alter tablespace '||tablespace_name||' begin backup;'||chr(10)||
+              '!cp '||file_name||' /u01/app/oracle/oradata/openbackup'||chr(10)||
+              'alter tablespace '||tablespace_name||' end backup;' as commands
+       from dba_data_files;
+
+  SQL> 질의 결과를 복사해서 실행하세요.
+  SQL> exit
+
+ -----------------
+ > Recovery Case <
+ -----------------
+
+ - complete recovery -
+
+ [0] parameter file 손상 1 : 파일이 삭제된 상황                            --> 재생성(alert 파일을 활용할 경우 편리하다.)
+ [0] parameter file 손상 2 : spfile에 오타 입력된 상황                     --> pfile 생성 ▷ pfile 편집 ▷ spfile 재생성
+ [0] password file 손상                                                    --> 재생성
+
+ [1] control file 1개 손상                                                 --> 복사, 붙여넣기 
+ [2] control file 몽땅 손상                                                --> create controlfile 명령 수행
+ [3] redo log file 멤버 1개 손상                                           --> 복사, 붙여넣기
+ [4] redo log file 그룹 손상 : Inactive                                    --> 삭제 or 복사, 붙여넣기 or Clear logfile
+ [5] datafile 손상 : temporary       Tablespace의 datafile                 --> restartup 또는 "추가 뒤 삭제"
+ [6] datafile 손상 : 일반            Tablespace의 datafile                 --> open   recover(open에서)
+ [7] datafile 손상 : 시스템(및 Undo) Tablespace의 datafile                 --> closed recover(mount에서)
+ [8] datafile 손상 : 백업하지 않은 datafile                                --> create datafile + redo
+ [9] datafile 손상 : 디스크 손상으로 인해 datafile을 다른 위치로 restore   --> rename file + redo
+
+ - incomplete recovery -
+
+ [10] table drop purge : flashback으로 복구 불가능한 경우                  --> time-based   불완전 복구
+
+ - Clone Database - 
+
+ [11] Database의 백업 datafile을 이용해서 복제 DB 생성하기  
+
+ - Clone Database를 이용한 불완전 복구 - 
+
+ [12] Clone Database를 이용한 복구 (user-managed 방식)      
+
+ - incomplete recovery -
+
+ [13] current(또는 active) group 손상                                      --> cancel-based 불완전 복구
+
+-----------------------------------------------------------
+ [0] parameter file 손상 1 : 파일이 삭제된 상황
+-----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ ls -l $ORACLE_HOME/dbs/*brdb.ora
+  [oracle@ora11gr2 ~]$ rm $ORACLE_HOME/dbs/*brdb.ora
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+	ORA-01078: failure in processing system parameters
+	LRM-00109: '/u01/app/oracle/product/11.2.0/dbhome_1/dbs/initbrdb.ora'
+
+  SQL> exit
+ 
+  [oracle@ora11gr2 ~]$ cd /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+  [oracle@ora11gr2 log]$ vi + alert_brdb.log
+
+     --> 이 파일을 거슬러 올라가다 처음 발견되는 파라미터의 모음을 이용해서 아래와 같이 파일을 새로 만드세요.
+
+  [oracle@ora11gr2 log]$ vi /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initbrdb.ora
+
+	processes                = 100
+	shared_pool_size         = 75497472
+	control_files            = /u01/app/oracle/oradata/brdb/control01.ctl, /u01/app/oracle/oradata/brdb/control02.ctl
+	db_block_size            = 4096
+	db_cache_size            = 67108864
+	compatible               = 11.2.0
+	log_archive_dest_1       = 'location=/u01/app/oracle/oradata/brdb_arch1/'
+	log_archive_dest_2       = 'location=/u01/app/oracle/oradata/brdb_arch2/'
+	undo_management          = AUTO
+	undo_tablespace          = UNDOTBS01
+	remote_login_passwordfile= EXCLUSIVE
+	instance_name            = brdb
+	db_name                  = brdb
+
+  [oracle@ora11gr2 log]$ cd
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup
+  SQL> create spfile from pfile;
+
+  SQL> startup force
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ----------------------------------------------------------
+	spfile                               string                 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/spfilebrdb.ora
+
+-----------------------------------------------------------
+ [0] parameter file 손상 2 : spfile에 오타 입력된 상황
+-----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+  SQL> alter system set undo_management=auta scope=spfile;
+  SQL> startup force
+
+	ORA-30043: Invalid value 'AUTA' specified for parameter 'Undo_Management'
+
+  SQL> create pfile from spfile;
+  SQL> !vi /u01/app/oracle/product/11.2.0/dbhome_1/dbs/initbrdb.ora
+
+	# 아래 파라미터만 수정하세요.
+
+	*.undo_management='AUTO'
+
+  SQL> create spfile from pfile;
+  SQL> startup force
+
+  SQL> show parameter spfile
+
+	NAME                                 TYPE                   VALUE
+	------------------------------------ ---------------------- ----------------------------------------------------------
+	spfile                               string                 /u01/app/oracle/product/11.2.0/dbhome_1/dbs/spfilebrdb.ora
+
+  SQL> exit
+
+-----------------------------------------------------------
+ [0] password file 손상
+-----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ rm /u01/app/oracle/product/11.2.0/dbhome_1/dbs/orapwbrdb
+
+	--> 원격지에서 sys로 접속할 수 없게 됩니다. SQL*Plus, iSQL*Plus DBA, EM을 이용해서 sys로 접속할 수 없다는 것입니다.
+
+  [oracle@ora11gr2 ~]$ orapwd file=/u01/app/oracle/product/11.2.0/dbhome_1/dbs/orapwbrdb password=weekend entries=5
+
+-----------------------------------------------------------
+ [1] control file 1개 손상 
+-----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> select name from v$controlfile;
+
+	NAME
+	-----------------------------------------------
+	/u01/app/oracle/oradata/brdb/control01.ctl
+	/u01/app/oracle/oradata/brdb/control02.ctl
+
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ rm /u01/app/oracle/oradata/brdb/control02.ctl
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+	ORA-00205: error in identifying control file, check alert log for more info
+
+  SQL> select status from v$instance;
+
+	STATUS
+	------------------------
+	STARTED
+
+  SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_brdb.log
+
+	ORA-00202: control file: '/u01/app/oracle/oradata/brdb/control02.ctl'
+	ORA-27037: unable to obtain file status
+
+  SQL> !cp /u01/app/oracle/oradata/brdb/control01.ctl /u01/app/oracle/oradata/brdb/control02.ctl
+  SQL> startup force
+  SQL> exit
+
+-----------------------------------------------------------
+ [2] control file 몽땅 손상 
+-----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ rm /u01/app/oracle/oradata/brdb/control*
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+  SQL> select status from v$instance;
+
+	STATUS
+	------------------------
+	STARTED
+
+  SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_brdb.log
+
+	ORA-00202: control file: '/u01/app/oracle/oradata/brdb/control01.ctl'
+	ORA-27037: unable to obtain file status
+
+  SQL> !cp /u01/app/oracle/oradata/brdb/control02.ctl /u01/app/oracle/oradata/brdb/control01.ctl --> 실패 : 모든 컨트롤 파일이 삭제되었음을 확인하는 순간이다.
+
+  SQL> !vi /u01/app/oracle/oradata/openbackup/control_20120218.sql
+
+	--> 아래 내용만 남기고 다른 내용은 모두 삭제하시면 됩니다.
+
+	CREATE CONTROLFILE REUSE DATABASE "BRDB" NORESETLOGS  ARCHIVELOG
+	    MAXLOGFILES 16
+	    MAXLOGMEMBERS 2
+	    MAXDATAFILES 30
+	    MAXINSTANCES 1
+	    MAXLOGHISTORY 292
+	LOGFILE
+	  GROUP 1 (
+	    '/u01/app/oracle/oradata/brdb/redo01_a.log',
+	    '/u01/app/oracle/oradata/brdb/redo01_b.log'
+	  ) SIZE 20M,
+	  GROUP 2 (
+	    '/u01/app/oracle/oradata/brdb/redo02_a.log',
+	    '/u01/app/oracle/oradata/brdb/redo02_b.log'
+	  ) SIZE 20M
+	DATAFILE
+	  '/u01/app/oracle/oradata/brdb/system01.dbf',
+	  '/u01/app/oracle/oradata/brdb/undotbs01.dbf',
+	  '/u01/app/oracle/oradata/brdb/sysaux01.dbf'
+	CHARACTER SET US7ASCII
+	;
+
+	RECOVER DATABASE
+
+	ALTER SYSTEM ARCHIVE LOG ALL;
+	ALTER DATABASE OPEN;
+	ALTER TABLESPACE TEMP ADD TEMPFILE '/u01/app/oracle/oradata/brdb/temp01.tmp'
+	     SIZE 20971520  REUSE AUTOEXTEND ON NEXT 20971520  MAXSIZE 2048M;
+
+  SQL> startup force nomount
+  SQL> @/u01/app/oracle/oradata/openbackup/control_20120218.sql
+
+  SQL> select status from v$instance;
+
+	STATUS
+	------------------------
+	OPEN
+
+  SQL> !ls -l /u01/app/oracle/oradata/brdb/*.ctl
+
+	-rw-r-----  1 oracle oinstall 6307840  9월 16 17:10 /u01/app/oracle/oradata/brdb/control01.ctl
+	-rw-r-----  1 oracle oinstall 6307840  9월 16 17:10 /u01/app/oracle/oradata/brdb/control02.ctl
+
+-----------------------------------------------------------
+ [3] redo log file 멤버 1개 손상
+-----------------------------------------------------------
+
+  SQL> col member format a60
+  SQL> select group#, member from v$logfile;
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/redo02_a.log
+  SQL> startup force
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_brdb.log
+
+	--> 파일을 거슬러 읽어가다보면 아래와 같은 내용을 만나게 될 것이다.
+
+	ORA-00313: open failed for members of log group 2 of thread 1
+	ORA-00312: online log 2 thread 1: '/u01/app/oracle/oradata/brdb/redo02_a.log'
+	ORA-27037: unable to obtain file status
+
+  SQL> !cp /u01/app/oracle/oradata/brdb/redo02_b.log /u01/app/oracle/oradata/brdb/redo02_a.log
+
+  SQL> startup force
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_brdb.log
+
+-----------------------------------------------------------
+ [4] redo log file 그룹 손상 : Inactive
+-----------------------------------------------------------
+  SQL> alter database add logfile ('/u01/app/oracle/oradata/brdb/redo03_a.log', 
+                                   '/u01/app/oracle/oradata/brdb/redo03_b.log') size 20M;
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> select * from v$log;
+  SQL> alter system checkpoint;
+  SQL> select * from v$log where status = 'INACTIVE';
+
+  SQL> select '!rm '||member from v$logfile
+       where group# = (select max(group#)from v$log where status = 'INACTIVE');
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/redo0?_a.log   --> ?에 해당되는 숫자는 각자 다를 수 있습니다.
+  SQL> !rm /u01/app/oracle/oradata/brdb/redo0?_b.log
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ export NLS_LANG=american_america.us7ascii
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+
+	ORA-00313: open failed for members of log group ? of thread 1
+	ORA-00312: online log ? thread 1: '/u01/app/oracle/oradata/brdb/redo0?_a.log'
+	ORA-00312: online log ? thread 1: '/u01/app/oracle/oradata/brdb/redo0?_b.log'
+
+  SQL> select * from v$log;
+
+	--> 질의결과를 통해 손상된 그룹이 inactive 그룹임을 확인했다.
+
+  SQL> alter database drop logfile group ?;
+
+  SQL> alter database open;
+
+  SQL> select * from v$log;
+
+  SQL> alter database add logfile group ? ('/u01/app/oracle/oradata/brdb/redo0?_a.log', 
+                                           '/u01/app/oracle/oradata/brdb/redo0?_b.log') size 10m;
+
+  SQL> select * from v$log;
+
+  --> 장애는 간단히 해결되었으나 반드시 Whole 백업을 해야 한다.
+
+  SQL> shutdown immediate
+  SQL> !cp -R /u01/app/oracle/oradata/brdb/* /u01/app/oracle/oradata/dontouch
+  SQL> exit
+
+----------------------------------------------------------
+ [5] datafile 손상 : temporary Tablespace의 datafile
+----------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup
+
+  SQL> create tablespace users 
+       datafile '/u01/app/oracle/oradata/brdb/users01.dbf' size 20m;
+
+  SQL> alter tablespace users begin backup;
+  SQL> !cp /u01/app/oracle/oradata/brdb/users01.dbf /u01/app/oracle/oradata/dontouch
+  SQL> alter tablespace users end backup;
+
+  SQL> create user james identified by bond default tablespace users temporary tablespace temp quota 1m on users;
+
+  SQL> grant create session, create table
+       to james;
+
+  SQL> conn james/bond
+
+  SQL> create table t1 
+       as select * from all_objects;
+ 
+  SQL> alter session set workarea_size_policy=manual;
+  SQL> alter session set sort_area_size=10;
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/temp01.tmp
+
+  SQL> select *
+       from t1 a, t1 b, t1 c, t1 d
+       order by 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
+
+	ORA-01116: error in opening database file 201
+	ORA-01110: data file 201: '/u01/app/oracle/oradata/brdb/temp01.tmp'
+
+  SQL> conn / as sysdba
+  SQL> startup force
+  SQL> !ls -l /u01/app/oracle/oradata/brdb/temp01.tmp
+
+  SQL> !vi + /u01/app/oracle/diag/rdbms/orcl/orcl/trace/alert_brdb.log
+
+	Mon Sep 19 14:23:33 2011
+	Re-creating tempfile /u01/app/oracle/oradata/brdb/temp01.tmp
+
+	--> startup을 다시 하지 않고 문제를 해결하는 방법 : 11gWS2의 4-6 페이지를 참조하세요.
+
+  SQL> exit
+
+----------------------------------------------------------------
+ [6] datafile 손상 : 일반 Tablespace의 datafile --> Open 복구
+----------------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ export NLS_LANG=american_america.us7ascii
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force
+  SQL> show user
+  USER은 "SYS"입니다
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/users01.dbf
+
+  SQL> startup force
+
+	ORA-01157: cannot identify/lock data file 4 - see DBWR trace file
+	ORA-01110: data file 4: '/u01/app/oracle/oradata/brdb/users01.dbf'
+
+  SQL> alter database datafile 4 offline;
+  SQL> alter database open;
+
+  SQL> !cp /u01/app/oracle/oradata/dontouch/users01.dbf /u01/app/oracle/oradata/brdb/users01.dbf
+  SQL> recover datafile 4;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+  SQL> alter database datafile 4 online;
+
+---------------------------------------------------------------------------------
+ [7] datafile 손상 : 시스템(및 Undo) Tablespace의 datafile --> Closed 복구
+---------------------------------------------------------------------------------
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/system01.dbf
+
+  SQL> startup force
+
+	ORA-01157: cannot identify/lock data file 1 - see DBWR trace file
+	ORA-01110: data file 1: '/u01/app/oracle/oradata/brdb/system01.dbf'
+
+  SQL> alter database datafile 1 offline;
+
+  SQL> alter database open;
+
+	ORA-01147: SYSTEM tablespace file 1 is offline
+	ORA-01110: data file 1: '/u01/app/oracle/oradata/brdb/system01.dbf'
+
+  SQL> !cp /u01/app/oracle/oradata/dontouch/system01.dbf /u01/app/oracle/oradata/brdb/system01.dbf
+
+	** OPEN   복구를 수행할 때 대상 파일은 offline 상태여야 합니다.
+	** CLOSED 복구를 수행할 때 대상 파일은 online  상태여야 합니다.
+
+  SQL> alter database datafile 1 online;
+
+  SQL> recover datafile 1;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+  SQL> alter database open;
+
+
+----------------------------------------------------------
+ [8] datafile 손상 : 백업하지 않은 datafile
+----------------------------------------------------------
+
+  * 주의 사항 : http://cafe.naver.com/gsinternet/32
+
+  SQL> col name format a60
+  SQL> select FILE#, CREATION_CHANGE#, CREATION_TIME, name from v$datafile;
+
+  SQL> create tablespace ms_ts datafile '/u01/app/oracle/oradata/brdb/ms_ts01.dbf' size 10m;
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/ms_ts01.dbf
+
+  SQL> startup force
+
+	ORA-01157: cannot identify/lock data file 5 - see DBWR trace file
+	ORA-01110: data file 5: '/u01/app/oracle/oradata/brdb/ms_ts01.dbf'
+
+  SQL> alter database datafile '/u01/app/oracle/oradata/brdb/ms_ts01.dbf' offline;
+
+  SQL> alter database open;
+
+  SQL> !cp /u01/app/oracle/oradata/dontouch/ms_ts01.dbf /u01/app/oracle/oradata/brdb/ms_ts01.dbf
+
+	에러! : 백업하지 않는 datafile이 손상되었음을 발견하는 상황이 발생한 것이다.
+
+  SQL> select FILE#, CREATION_CHANGE#, CREATION_TIME, name from v$datafile;
+
+  SQL> alter database create datafile '/u01/app/oracle/oradata/brdb/ms_ts01.dbf';
+  SQL> recover datafile '/u01/app/oracle/oradata/brdb/ms_ts01.dbf';
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+  SQL> alter database datafile '/u01/app/oracle/oradata/brdb/ms_ts01.dbf' online;
+
+  SQL> drop tablespace ms_ts including contents and datafiles;
+
+---------------------------------------------------------------------------
+ [9] datafile 손상 : 디스크 손상으로 인해 datafile을 다른 위치로 restore
+---------------------------------------------------------------------------
+
+  SQL> !rm /u01/app/oracle/oradata/brdb/users01.dbf
+
+  SQL> startup force
+
+	ORA-01157: cannot identify/lock data file 4 - see DBWR trace file
+	ORA-01110: data file 4: '/u01/app/oracle/oradata/brdb/users01.dbf'
+
+  SQL> alter database datafile 4 offline;
+  SQL> alter database open;
+
+  --> 손상된 파일을 복원하려 했으나 원래 파일이 있던 디스크가 손상되어 
+      다른 위치로 복원해야만 한다면 아래와 같은 방법을 사용하시면 됩니다.
+
+  SQL> !mkdir /u01/app/oracle/oradata/disk1
+  SQL> !cp /u01/app/oracle/oradata/dontouch/users01.dbf /u01/app/oracle/oradata/disk1/users01.dbf
+  SQL> alter database rename file '/u01/app/oracle/oradata/brdb/users01.dbf' to '/u01/app/oracle/oradata/disk1/users01.dbf';
+
+  SQL> recover datafile 4;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+  SQL> alter database datafile 4 online;
+
+  SQL> col file_name format a60
+  SQL> select tablespace_name, file_name from dba_data_files
+       union all
+       select tablespace_name, file_name from dba_temp_files;
+
+	TABLESPACE_NAME      CONTENTS  FILE_NAME
+	-------------------- --------- --------------------------------------------------
+	USERS                PERMANENT /u01/app/oracle/oradata/disk1/users01.dbf    <-- 파일의 위치에 주목하세요.
+
+  -- 정리
+
+  SQL> drop tablespace users including contents and datafiles;
+  SQL> !rm -r /u01/app/oracle/oradata/disk1
+  SQL> shutdown immediate
+
+  -- Whole backup 및 과거 백업 정리
+
+  SQL> !rm -rf /u01/app/oracle/oradata/dontouch/*
+  SQL> !rm -rf /u01/app/oracle/oradata/brdb_arch1/*
+  SQL> !rm -rf /u01/app/oracle/oradata/brdb_arch2/*
+
+  SQL> !cp /u01/app/oracle/oradata/brdb/* /u01/app/oracle/oradata/dontouch
+  SQL> exit
+
+*******************************************************
+ 아래에서는 불완전 복구 상황들을 다룹니다.
+*******************************************************
+
+----------------------------------------------------------------
+ [10] table drop purge : flashback으로 복구 불가능한 경우
+----------------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force 
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> alter user james quota 1m on system;
+  SQL> create table james.t2 (no number) tablespace system;  
+  SQL> insert into james.t2 values (1000);
+  SQL> insert into james.t2 values (2000);
+  SQL> commit;
+
+  SQL> select * from james.t2;
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> !date
+
+	2012. 02. 23. (목) 15:10:29 KST
+
+	--> 실제 상황에서는 Logminer를 이용해서 에러가 발생한 시간을 확인하면 됩니다.
+	    예제 : http://energ.tistory.com/entry/oracle-logminer
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> drop table james.t2 purge;
+  SQL> select * from james.t2;
+
+	ORA-00942: table or view does not exist
+
+  SQL> show recyclebin
+
+	--> 중요한 테이블이 삭제되었음을 알게되어 recyclebin을 확인했으나 완전히 삭제되었음을 알게되었다.
+	--> 아직 clone database를 이용한 복구를 알지 못하는 수준이기에 일반적인 불완전 복구를 수행하기로 결정한다.
+
+               모든 datafile 복원
+                      ↓
+               startup mount;
+                      ↓
+               recover database until time '원하는 시점';
+                      ↓
+               alter database open resetlogs;
+
+  SQL> shutdown abort
+
+  SQL> !cp /u01/app/oracle/oradata/dontouch/*.dbf /u01/app/oracle/oradata/brdb
+  SQL> startup mount;
+  SQL> recover database until time '2012-02-23 15:10:29';
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+  SQL> alter database open resetlogs;
+
+  SQL> select * from james.t2;
+
+	        NO
+	----------
+	      2000
+	      1000
+
+  SQL> select * from v$log;
+
+
+	    GROUP#    THREAD#  SEQUENCE#      BYTES    MEMBERS ARC STATUS           FIRST_CHANGE# FIRST_TIM
+	---------- ---------- ---------- ---------- ---------- --- ---------------- ------------- ---------
+        	 1          1          0   20971520          2 YES UNUSED                       0
+	         2          1          1   20971520          2 NO  CURRENT                 515775 10-DEC-11
+	         3          1          0   10485760          2 YES UNUSED                       0
+
+	--> 여러 그룹의 status가 unused이고 sequence#이 0이라는 것에 주목하세요.
+
+  SQL> exit
+
+------------------------------------------------------------------------
+ [11] Database의 백업 datafile을 이용해서 복제 DB 생성하기  
+------------------------------------------------------------------------
+
+  * 참고 : http://gseducation.blog.me/20096193881
+
+  [oracle@ora11gr2 ~]$ mkdir /home/oracle/cldb
+  [oracle@ora11gr2 ~]$ cp /u01/app/oracle/oradata/dontouch/*.dbf /home/oracle/cldb
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb 
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> create pfile='/home/oracle/cldb/initcldb.ora' from spfile;
+  SQL> alter database backup controlfile to trace as '/home/oracle/cldb/create_cldb_controlfile.sql';
+
+  SQL> !ls -l  /home/oracle/cldb
+
+	-rw-r--r--  1 oracle oinstall      6648  9월 20 14:39 create_babadb_controlfile.sql
+	-rw-r--r--  1 oracle oinstall       579  9월 20 14:38 initbabadb.ora
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:36 sysaux01.dbf
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:37 system01.dbf
+	-rw-r-----  1 oracle oinstall 125833216  9월 20 14:37 undotbs01.dbf
+
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ vi /home/oracle/cldb/initcldb.ora
+
+	*.db_name='cldb'
+	*.instance_name='cldb'
+	*.compatible='11.2.0'
+	*.control_files='/home/oracle/cldb/control01.ctl'
+	*.log_archive_dest_1='location=/home/oracle/cldb/'
+	*.db_block_size=4096
+	*.db_cache_size=67108864
+	*.processes=100
+	*.remote_login_passwordfile='EXCLUSIVE'
+	*.shared_pool_size=75497472
+	*.undo_management='auto'
+	*.undo_tablespace='UNDOTBS01'
+
+  [oracle@ora11gr2 ~]$ vi /home/oracle/cldb/create_cldb_controlfile.sql
+
+	CREATE CONTROLFILE set DATABASE "cldb" resetlogs  ARCHIVELOG
+	LOGFILE
+	  GROUP 1 (
+	    '/home/oracle/cldb/redo01_a.log'
+	  ) SIZE 20M,
+	  GROUP 2 (
+	    '/home/oracle/cldb/redo02_a.log'
+	  ) SIZE 20M
+	DATAFILE
+	  '/home/oracle/cldb/system01.dbf',
+	  '/home/oracle/cldb/undotbs01.dbf',
+	  '/home/oracle/cldb/sysaux01.dbf'
+	CHARACTER SET US7ASCII;
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=cldb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup nomount pfile=/home/oracle/cldb/initcldb.ora
+  SQL> @/home/oracle/cldb/create_cldb_controlfile.sql
+
+  SQL> select status from v$instance;
+
+	STATUS
+	------------
+	MOUNTED
+
+  SQL> !ls -l  /home/oracle/cldb
+
+	-rw-r-----  1 oracle oinstall   6078464  9월 20 14:50 control01.ctl
+	-rw-r--r--  1 oracle oinstall       446  9월 20 14:47 create_cldb_controlfile.sql
+	-rw-r--r--  1 oracle oinstall       371  9월 20 14:42 initbabadb.ora
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:36 sysaux01.dbf
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:37 system01.dbf
+	-rw-r-----  1 oracle oinstall 125833216  9월 20 14:37 undotbs01.dbf
+
+  SQL> alter database open resetlogs;
+  SQL> !ls -l  /home/oracle/cldb
+
+	-rw-r-----  1 oracle oinstall   6078464  9월 20 14:52 control01.ctl
+	-rw-r--r--  1 oracle oinstall       446  9월 20 14:47 create_babadb_controlfile.sql
+	-rw-r--r--  1 oracle oinstall       371  9월 20 14:42 initbabadb.ora
+	-rw-r-----  1 oracle oinstall  20972032  9월 20 14:51 redo01_a.log
+	-rw-r-----  1 oracle oinstall  20972032  9월 20 14:51 redo02_a.log
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:51 sysaux01.dbf
+	-rw-r-----  1 oracle oinstall 209719296  9월 20 14:51 system01.dbf
+	-rw-r-----  1 oracle oinstall 125833216  9월 20 14:51 undotbs01.dbf
+
+  SQL> select instance_name, status from v$instance;
+
+	INSTANCE_NAME                    STATUS
+	-------------------------------- ------------------------
+	babadb                           OPEN
+
+  SQL> col member format a60
+  SQL> select * from v$log;
+  SQL> select * from v$logfile;
+
+  SQL> shutdown abort
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ rm -rf /home/oracle/cldb
+
+------------------------------------------------------------------------
+ [12] Clone Database를 이용한 복구 (user-managed 방식)      
+------------------------------------------------------------------------
+
+  [oracle@ora11gr2 ~]$ export NLS_LANG=american_america.us7ascii
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup force 
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> shutdown immediate
+  SQL> !cp -R /u01/app/oracle/oradata/brdb/* /u01/app/oracle/oradata/dontouch
+
+  SQL> startup
+
+  SQL> insert into james.t2 values (3000);
+  SQL> insert into james.t2 values (4000);
+  SQL> commit;
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> select * from  james.t2;
+
+  SQL> !date
+
+	2012. 02. 23. (목) 17:15:46 KST
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> drop table  james.t2 purge;
+
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+  SQL> alter system switch logfile;
+
+  SQL> select * from  james.t2;
+
+	ORA-00942: table or view does not exist
+
+  SQL> show recyclebin
+  SQL> exit
+
+	--> 중요한 테이블이 삭제되었음을 알게되어 recyclebin을 확인했으나 완전히 삭제되었음을 알게되었다.
+	--> 그래서 clone database를 이용한 복구를 수행하기로 결정한다.
+
+	       clone database를 이용한 불완전 복구
+                      ↓
+               필요한 테이블 export
+                      ↓
+               사용중인 database로 import
+
+  [oracle@ora11gr2 ~]$ mkdir /home/oracle/clonedb
+  [oracle@ora11gr2 ~]$ cp /u01/app/oracle/oradata/dontouch/*.dbf /home/oracle/clonedb
+  [oracle@ora11gr2 ~]$ cp /u01/app/oracle/oradata/brdb_arch1/*   /home/oracle/clonedb
+  [oracle@ora11gr2 ~]$ cp /u01/app/oracle/oradata/brdb/*.log     /home/oracle/clonedb
+  [oracle@ora11gr2 ~]$ ls -l /home/oracle/clonedb
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb  
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> create pfile='/home/oracle/clonedb/initclonedb.ora' from spfile;
+  SQL> alter database backup controlfile to trace as '/home/oracle/clonedb/create_clonedb_controlfile.sql';
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ vi /home/oracle/clonedb/initclonedb.ora
+
+	*.db_name='clonedb'
+	*.instance_name='clonedb'
+	*.compatible='11.2.0'
+	*.control_files='/home/oracle/clonedb/control01.ctl'
+	*.log_archive_dest_1='location=/home/oracle/clonedb/'
+	*.db_block_size=4096
+	*.db_cache_size=67108864
+	*.processes=100
+	*.remote_login_passwordfile='EXCLUSIVE'
+	*.shared_pool_size=75497472
+	*.undo_management='auto'
+	*.undo_tablespace='UNDOTBS01'
+
+  [oracle@ora11gr2 ~]$ vi /home/oracle/clonedb/create_clonedb_controlfile.sql
+
+	CREATE CONTROLFILE set DATABASE "clonedb" resetlogs  ARCHIVELOG
+	LOGFILE
+	  GROUP 1 (
+	    '/home/oracle/clonedb/redo01_a.log'
+	  ) SIZE 20M,
+	  GROUP 2 (
+	    '/home/oracle/clonedb/redo02_a.log'
+	  ) SIZE 20M,
+	  GROUP 3 (
+	    '/home/oracle/clonedb/redo03_a.log'
+	  ) SIZE 10M
+	DATAFILE
+	  '/home/oracle/clonedb/system01.dbf',
+	  '/home/oracle/clonedb/undotbs01.dbf',
+	  '/home/oracle/clonedb/sysaux01.dbf'
+	CHARACTER SET US7ASCII;
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=clonedb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> startup nomount pfile=/home/oracle/clonedb/initclonedb.ora
+  SQL> @/home/oracle/clonedb/create_clonedb_controlfile.sql
+
+  SQL> !ls -l /home/oracle/clonedb
+
+  SQL> select instance_name, status from v$instance;
+
+	INSTANCE_NAME                    STATUS
+	-------------------------------- ------------------------
+	clonedb                          MOUNTED
+
+  SQL> -- 아래 명령에서 사용되는 시간은 모두 다릅니다. 위의 date 명령에서 확인한 시간을 사용하세요.
+
+  SQL> recover database until time '2012-02-23 17:15:46' USING backup controlfile;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	|auto      <-- auto 입력
+
+	... 생략 ...
+
+  SQL> alter database open resetlogs;
+  SQL> select * from  james.t2;
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ exp james/bond file=a.dmp tables=t2
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=brdb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> select * from james.t2;
+  SQL> !imp james/bond file=a.dmp tables=t2
+  SQL> select * from james.t2;
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ export ORACLE_SID=clonedb
+  [oracle@ora11gr2 ~]$ sqlplus / as sysdba
+  SQL> shutdown  abort
+  SQL> exit
+
+  [oracle@ora11gr2 ~]$ rm -rf /home/oracle/clonedb
+
+
+--------------------------------------------------------------
+ [13] current(또는 active) group 손상
+--------------------------------------------------------------
+
+ - 에러 상황 재현
+
+  SQL> startup
+
+  SQL> alter system switch logfile;
+  SQL> /
+  SQL> /
+  SQL> /
+  SQL> /
+  SQL> /
+
+  SQL> select group#, status from v$log;
+
+  SQL> select '!rm '||member as commands from v$logfile
+       where group# = (select MAX(group#) from v$log where status = 'CURRENT');
+
+  SQL> !rm /u01/app/oracle/oradata/prod/redo0□_a.log
+  SQL> !rm /u01/app/oracle/oradata/prod/redo0□_b.log
+
+  SQL> startup force
+
+	ORA-00313: open failed for members of log group □ of thread 1
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_a.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_b.log'
+
+  SQL> select * from v$log order by group#;
+ 
+        --> 삭제된 그룹이 CURRENT임을 확인하고 복구를 수행한다.
+
+  SQL> alter database clear logfile group □;
+
+	ORA-01624: log □ needed for crash recovery of instance prod (thread 1)
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_a.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_b.log'
+
+        --> CURRENT 그룹은 clear할 수 없다.
+
+  SQL> alter database drop logfile group □;
+
+	ORA-01623: log □ is current log for instance prod (thread 1) - cannot drop
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_a.log'
+	ORA-00312: online log □ thread 1: '/u01/app/oracle/oradata/prod/redo0□_b.log'
+
+        --> CURRENT 그룹은 clear할 수 없다.
+
+ - 복구
+
+  SQL> shutdown abort
+  SQL> !cp /u01/app/oracle/oradata/dontouch/*.dbf /u01/app/oracle/oradata/prod    --> 모든 datafile 복원
+  SQL> startup mount                                                              --> Startup mount
+  SQL> recover database;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	auto       <-- 입력 
+
+        ...
+
+	ORA-00283: recovery session canceled due to errors
+	ORA-00313: open failed for members of log group 2 of thread 1
+	ORA-00312: online log 2 thread 1: '/u01/app/oracle/oradata/prod/redo02_b.log'
+	ORA-27037: unable to obtain file status
+	Linux Error: 2: No such file or directory
+	Additional information: 3
+	ORA-00312: online log 2 thread 1: '/u01/app/oracle/oradata/prod/redo02_a.log'
+	ORA-27037: unable to obtain file status
+	Linux Error: 2: No such file or directory
+	Additional information: 3
+
+	ORA-01112: media recovery not started
+
+	--> 에러가 발생하면 복구가 중지됩니다.
+
+  SQL> recover database until cancel;
+
+	Specify log: {<RET>=suggested | filename | AUTO | CANCEL}
+	cancel     <-- 입력 
+
+  SQL> !ls -l /u01/app/oracle/oradata/prod/*.log        --> 아직 삭제된 redo log file이 복구되지 않았음을 확인
+
+  SQL> alter database open resetlogs;
+
+  SQL> !ls -l /u01/app/oracle/oradata/prod/*.log        --> 삭제된 redo log file이 복구되었음을 확인
+
+  SQL> select * from v$log;
+
+	    GROUP#    THREAD#  SEQUENCE#      BYTES    MEMBERS ARC STATUS           FIRST_CHANGE# FIRST_TIM
+	---------- ---------- ---------- ---------- ---------- --- ---------------- ------------- ---------
+	         1          1          0   20971520          2 YES UNUSED                       0
+	         2          1          1   20971520          2 NO  CURRENT                 963987 21-JUL-11
+	         3          1          0   10485760          2 YES UNUSED                       0
+	         4          1          0   10485760          2 YES UNUSED                       0
+
+  SQL> shutdown immediate
+  SQL> !ls -l /u01/app/oracle/oradata/prod_arch1/
+  SQL> !rm /u01/app/oracle/oradata/prod_arch1/*
+  SQL> !rm /u01/app/oracle/oradata/prod_arch2/*
+
+  SQL> !cp /u01/app/oracle/oradata/prod/* /u01/app/oracle/oradata/dontouch
+  SQL> !ls -l /u01/app/oracle/oradata/dontouch
+  SQL> exit
+
+
+ *************************************************
+  cf.OMF 방식으로 Database 생성하기
+ *************************************************
+
+  0.디렉토리 및 파라미터 파일 생성
+
+   OS] mkdir /u01/app/oracle/oradata/omfdb               --> Database Area
+   OS] mkdir /u01/app/oracle/oradata/omfdb_dontouch      --> Recovery Area
+   OS] vi $ORACLE_HOME/dbs/initomfdb.ora
+
+	db_name       = omfdb
+	instance_name = omfdb
+	compatible    = 11.2.0
+	processes     = 100
+	
+	undo_management = auto
+
+	db_cache_size    = 64m
+	shared_pool_size = 72m
+	db_block_size    = 4096
+
+        db_create_file_dest         = '/u01/app/oracle/oradata/omfdb/'
+        db_create_online_log_dest_1 = '/u01/app/oracle/oradata/omfdb/'
+        db_create_online_log_dest_2 = '/u01/app/oracle/oradata/omfdb/'
+
+        db_recovery_file_dest_size = 4G
+        db_recovery_file_dest = '/u01/app/oracle/oradata/omfdb_dontouch/'
+
+	remote_login_passwordfile = exclusive
+
+
+  1.Software 시작
+
+    OS] export ORACLE_SID=omfdb
+    OS] sqlplus / as sysdba
+    SQL> startup nomount
+
+  2.Create database 명령 실행 
+
+    SQL> create database omfdb;
+
+    SQL> ed db.sql
+
+        col name format a80
+
+        select name from v$controlfile
+        union all
+        select member from v$logfile
+        union all
+        select name from v$datafile
+        union all
+        select name from v$tempfile;
+
+    SQL> @db.sql
+
+	NAME
+	--------------------------------------------------------------------------------
+	/u01/app/oracle/oradata/omfdb/OMFDB/controlfile/o1_mf_72sp107p_.ctl
+	/u01/app/oracle/oradata/omfdb/OMFDB/controlfile/o1_mf_72sp10cp_.ctl
+	/u01/app/oracle/oradata/omfdb/OMFDB/onlinelog/o1_mf_1_72sp10gm_.log
+	/u01/app/oracle/oradata/omfdb/OMFDB/onlinelog/o1_mf_1_72sp10q0_.log
+	/u01/app/oracle/oradata/omfdb/OMFDB/onlinelog/o1_mf_2_72sp12l9_.log
+	/u01/app/oracle/oradata/omfdb/OMFDB/onlinelog/o1_mf_2_72sp159p_.log
+	/u01/app/oracle/oradata/omfdb/OMFDB/datafile/o1_mf_system_72sp1b97_.dbf
+	/u01/app/oracle/oradata/omfdb/OMFDB/datafile/o1_mf_sys_undo_72sp1nf7_.dbf
+	/u01/app/oracle/oradata/omfdb/OMFDB/datafile/o1_mf_sysaux_72sp1nxp_.dbf
+
+    SQL> create temporary tablespace temp;
+    SQL> create tablespace users1;
+    SQL> create tablespace users2;
+
+    SQL> alter user sys identified by oracle;      --> 기본 암호 : change_on_install
+    SQL> alter user system identified by oracle;   --> 기본 암호 : manager
+ 
+  3.필수 Script 수행
+
+    SQL> ed after_db_create.sql
+
+	conn sys/oracle as sysdba
+	@?/rdbms/admin/catalog.sql
+	@?/rdbms/admin/catproc.sql
+
+	conn system/oracle
+	@?/sqlplus/admin/pupbld.sql
+
+    SQL> @ after_db_create.sql
+
+    --> 아래 질의 결과를 이용해서 control_files 파라미터를 추가 설정하세요.
+
+    SQL> select name from v$controlfile;
+
+	NAME
+	--------------------------------------------------------------------------------
+	/u01/app/oracle/oradata/omfdb/OMFDB/controlfile/각자파일이름이다릅니다1.ctl
+	/u01/app/oracle/oradata/omfdb/OMFDB/controlfile/각자파일이름이다릅니다2.ctl
+
+    SQL> !vi $ORACLE_HOME/dbs/initomfdb.ora
+
+	# 다음 파라미터를 추가하세요.
+
+	control_files = /u01/app/oracle/oradata/omfdb/OMFDB/controlfile/각자파일이름이다릅니다1.ctl, /u01/app/oracle/oradata/omfdb/OMFDB/controlfile/각자파일이름이다릅니다2.ctl
+
+    SQL> connect / as sysdba
+    SQL> startup force
+
+    SQL> create tablespace ts100;
+    SQL> create tablespace ts101 datafile size 10m;
+    SQL> alter database add logfile size 10m;
+
+    SQL> drop tablespace ts100;
+    SQL> drop tablespace ts101;
+    SQL> alter database drop logfile group 3; 
+    SQL> exit

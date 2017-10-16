@@ -1,0 +1,161 @@
+SELECT department_id, department_name, manager_id, location_id
+FROM departments;
+
+
+create or replace view v1
+as
+select e.empno, e.ename,d.*
+from emp e, dept d
+where e.ename like 'A%'
+and d.deptno = 10;
+
+exec pt('select * from v1')
+
+
+select empno,
+	sal,
+	comm,
+	sal*12+nvl(comm,0)	ann_sal,
+	sal*12+nvl(comm,0) as ann_sal,
+	sal*12+nvl(comm,0)	"$Ann sal"
+from emp;
+
+
+select empno as sal
+	from emp;
+
+select empno,ename||' is a '||job as sawon
+from emp;
+
+
+select empno,'Dear '||ename||'!'||chr(10)||
+'your salary from '||sal|| 'to'||sal *1.2 as kidding
+from emp;
+
+
+
+select 'drop table '||tname||'cascade constrants;'as commands
+from tab
+where tname like 'E%';
+
+
+
+
+select ename ||'''s house is bigger than Tom's'as ret
+from emp;
+
+
+select ename || q'e's house is bigger than Tom's e'
+from emp;
+
+
+select ename || q'!'s house is bigger than Tom's !'
+from emp;
+
+
+select ename || q'#'s house is bigger than Tom's #'
+from emp;
+
+select unique deptno from emp;
+select distinct deptno from emp;
+
+
+SELECT last_name, salary
+FROM employees
+WHERE salary BETWEEN 2500 AND 3500 ;
+
+
+SELECT last_name
+FROM employees
+WHERE last_name BETWEEN 'King' AND '';
+
+
+select * from emp
+where mgr =7789;
+
+select * from emp
+where mgr =7968;
+
+select * from emp
+where mgr =7839;
+
+select * from emp
+where mgr in(7698, 7839, 7788);
+
+SELECT first_name
+FROM employees
+WHERE first_name LIKE 'K%' ;
+
+
+
+drop table t1 purge;
+create table t1 (col1 varchar2(30));
+insert into t1 values('AAA');
+insert into t1 values('ABA');
+insert into t1 values('ACA');
+insert into t1 values('A_A');
+commit;
+
+select*from t1 where col1 like 'A_A%';-엉터리
+select*from t1 where col1 like 'A!_A%' escape '!';-제대로
+
+select * from emp where comm=comm;-값이 있는것만 추출
+
+select * from emp where empno = empno;
+select * from emp where comm = comm;
+
+where a||b + 100>=2000
+
+
+select empno,ename, sal salary from emp order by sal desc;
+select empno,ename, sal salary from emp order by salary desc;
+select empno,ename, sal salary from emp order by 3 desc;
+
+select empno,ename, sal,hiredate salary from emp order by hiredate;
+
+select empno,ename, sal salary from emp order by empno;
+
+
+select deptno, ename, sal from emp order by deptno,sal desc;
+
+select * from emp order by comm;
+
+select * from emp order by comm desc nulls last;
+
+
+문제. 월별 정렬
+
+select empno, hiredate,to_char(hiredate, 'MM')
+from emp;
+
+select empno, hiredate,to_char(hiredate, 'MM')
+from emp
+order by to_char(hiredate, 'MM');
+
+select empno, hiredate
+from emp
+order by to_char(hiredate, 'MM');
+
+
+
+SELECT * FROM EMP ORDER BY JOB
+
+select empno,ename,hiredate
+from emp
+where to_char(hiredate,'day') like 'thur%';
+
+
+select deptno,job,count(*),sum(sal),avg(sal)
+from emp
+group by deptno, job
+order by 1,2;
+
+select comm, nvl(comm,0)
+from emp
+order by comm nulls last;
+
+
+
+
+
+

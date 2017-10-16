@@ -1,0 +1,2737 @@
+
+=============================
+ 0
+=============================
+
+# 학습 목표
+
+  - SQL      : DDL, DML, TCL, DCL
+  - Objects  : Table, View, Index, Sequence, Synonym
+  - SQL*Plus 
+
+# 용어
+
+  - Data vs Information
+  - Database
+  - DBMS
+
+  - 관계형데이터베이스(SQL Database) = Table(자료구조) + SQL(입출력명령)
+
+# 실습 환경 설정
+
+  1.Instant Client 다운로드 및 설정
+
+    - http://www.oracle.com/technetwork/database/features/instant-client/index-097480.html
+
+    C:\Users\student> notepad ic.bat
+
+    set path=C:\instantclient_12_1;%path%
+     sqlplus dream01/catcher@70.12.50.50:1521/XE
+
+    C:\Users\student> ic
+
+    SQL> show user
+    USER is "DREAM01" 
+
+    SQL> select * from tab;
+
+    SQL> ed r.sql
+
+    select no as you
+    from (select level as no
+          from dual
+          connect by level <= 24
+          order by dbms_random.value)
+    where rownum = 1;
+
+    SQL> @r
+
+  2.실습용 테이블 생성
+
+    - http://cafe.naver.com/n1books/11 포스트에 첨부된 creobjects.sql, demobld.sql 다운로드
+
+    C:\Users\student> ic
+
+    SQL> @C:\Users\student\Desktop\creobjects.sql   -- EMPLOYEES 등 생성
+    SQL> @C:\Users\student\Desktop\demobld.sql      -- EMP 등 생성
+
+    C:\Users\student> ic
+
+    SQL> select * from tab;
+    SQL> select * from dept;
+
+    SQL> show all
+
+    linesize 80
+    pagesize 14
+
+    SQL> select * from emp;
+
+    SQL> set linesize 200 
+    SQL> set pagesize 40
+
+    SQL> list     -- 또는 l
+
+    SQL> run
+    SQL> r
+    SQL> /
+
+  3.SQL Developer 다운로드 설치
+
+    - SQL*Plus List of Unsupported Commands and Features
+    - http://www.oracle.com/technetwork/developer-tools/sqlcl/downloads/sqlcl-relnotes-421-3415922.html?printOnly=1#sqlplus
+
+=======================
+ SQL*Plus 이해
+=======================
+
+# SQL*Plus Commands
+
+  - 환경설정 : set, show
+  - 결과포맷 : column, ttitle, btitle, break
+  - 명령편집 : edit, list, input, change, append, delete, 숫자
+  - 파일편집 : edit  파일이름 : 생성 or 편집               
+               save  파일이름 : 버퍼 -> 파일
+               get   파일이름 : 파일 -> 버퍼
+               start 파일이름 : 파일 -> 버퍼 -> 실행
+               (= @ 파일이름)
+               spool 파일이름 ~ spool off
+  - 치환변수 : &, &&, define, undefine, accept, 숫자, col 
+ 
+  cf. ed 파일이름 -> @파일이름
+      ed          -> run (또는 r 또는 /)
+
+# 환경설정
+               
+  SQL> show user
+  SQL> show all
+
+  SQL> show colsep
+  SQL> set colsep |
+  SQL> select * from dept;
+
+  SQL> set underline *
+
+  SQL> r
+    1* select * from dept
+
+  SQL> exit
+
+# 결과포맷
+
+  SQL> select department_id, employee_id, last_name, salary
+       from employees;
+
+  SQL> col last_name     format a10
+  SQL> col salary        format 999,999.99
+  SQL> col employee_id   heading ENO format 999
+  SQL> col department_id heading D|E|P|T|N|O 
+
+  SQL> col
+  SQL> col salary
+
+  SQL> /
+
+  SQL> col employee_id clear
+  SQL> clear col
+
+  SQL> ed sal_report.sql
+
+    set linesize 60
+    set pagesize 40
+    set feedback off
+    set verify off
+
+    tti 'Salary|Report'
+    bti 'Confidential'
+    break on department_id skip 1
+
+    col last_name     format a15
+    col salary        format 999,999.99
+    col employee_id   heading ENO    format 99999999
+    col department_id heading DEPTNO format 99999999
+
+    spool salary_replort.txt
+
+    accept deptno prompt 'Enter DEPTNO Please : '
+
+    select department_id, employee_id, last_name, salary
+    from employees
+    where department_id in (&deptno)
+    order by department_id, salary desc, last_name;
+    
+    spool off
+
+    tti off
+    bti off
+    clear break
+
+    col last_name     clear
+    col salary        clear 
+    col employee_id   clear
+    col department_id clear 
+
+    set linesize 200
+    set pagesize 40
+    set feedback on
+    set verify on
+
+  SQL> @ sal_report.sql
+  Enter DEPTNO Please : 60
+
+  SQL> ed salary_replort.txt
+
+  SQL> @ sal_report.sql
+  Enter DEPTNO Please : 10,50,110
+
+  SQL> ed salary_replort.txt
+
+# 명령편집
+
+  SQL> select empno
+    2  from emp;
+
+  SQL> list
+
+  SQL> i
+    3  where deptno = 10
+    4
+
+  SQL> list
+  
+  SQL> /
+
+  SQL> l
+
+  SQL> c/10/20
+  
+  SQL> l
+  
+  SQL> /
+
+  SQL> l
+
+  SQL> 1
+
+  SQL> a , ename
+
+  SQL> l
+
+  SQL> /
+
+  SQL> i
+    4  and job = 'MANAGER'
+    5  order by empno;
+
+  SQL> l
+    1  select empno, ename
+    2  from emp
+    3  where deptno = 20
+    4  and job = 'MANAGER'
+    5* order by empno
+
+  SQL> l 2 5
+
+  SQL> del
+  SQL> l
+
+  SQL> del 1 2
+  SQL> l
+    1  where deptno = 20
+    2* and job = 'MANAGER'
+
+  SQL> 0 select * from emp
+  SQL> l
+    1  select * from emp
+    2  where deptno = 20
+    3* and job = 'MANAGER'
+  SQL> /
+
+# 파일편집 
+
+  SQL> select * from emp
+    2  where deptno = 30
+    3  and sal >= 1000;
+
+  SQL> save s001.sql
+
+  SQL> select * from dept;
+  SQL> l
+
+  SQL> start s001
+
+  SQL> cl buff
+
+  SQL> get s001
+  SQL> l
+    1  select * from emp
+    2  where deptno = 30
+    3* and sal >= 1000
+
+  SQL> 2
+  
+  SQL> c/30/10
+    2* where deptno = 10
+
+  SQL> r
+
+  SQL> ed s002.sql
+
+    select * 
+    from dept
+    where loc like 'NEW%';
+
+  SQL> @s002
+
+# 치환변수(Substitution Variables)
+
+  - 변수     ≒ 그릇
+  - 상수     ≒ 그릇
+  - 매개변수 ≒ 그릇
+
+  SQL> define
+  SQL> define v1 = 100
+  SQL> define v1
+  SQL> define  
+
+  SQL> undefine v1
+  SQL> define
+
+  SQL> ed sv01
+
+    set verify off
+
+    accept amu number prompt 'Enter deptno please : '
+
+    select *
+    from emp
+    where deptno = &amu;
+
+    set verify on
+
+  SQL> @sv01
+  Enter value for amu: 30
+
+  SQL> ed sv02
+ 
+    select *
+    from emp
+    where ename = '&name';
+
+  SQL> @ sv02
+
+  SQL> ed sv03
+
+    select empno, &&col1
+    from emp
+    order by &col1;
+
+    undefine col1
+
+  SQL> @ sv03
+  Enter value for col1: sal
+
+  SQL> @sv03
+  Enter value for col1: deptno
+
+  SQL> ed sv04
+
+    select empno, ename, sal
+    from &1
+    where deptno = &2
+    order by &3;
+
+  SQL> @sv04 emp 30 empno
+  SQL> @sv04 emp 10 sal
+
+  SQL> ed sv05
+
+    prompt Salary Report
+
+    col avg_sal new_value sv_avg_sal
+
+    select avg(sal) as avg_sal
+    from emp
+    where deptno = &1;
+
+    select * 
+    from emp
+    where deptno = &1
+    and sal > &sv_avg_sal;
+
+  SQL> @sv05 10
+  SQL> @sv05 30
+
+# desc.sql
+
+  SQL> ed desc.sql
+
+       set linesize 50
+       desc &1
+       set linesize 200
+
+  SQL> @desc emp
+
+# SQL
+
+  https://en.wikipedia.org/wiki/SQL
+
+# SQL 분류
+
+  - DDL : CREATE, ALTER, DROP, RENAME, TRUCATE, COMMENT
+  - DML : INSERT, UPDATE, DELETE, MERGE, SELECT 
+  - TCL : COMMIT, ROLLBACK, SAVEPOINT
+  - DCL : GRANT, REVOKE
+
+# SELECT 이해
+
+  - 검색, 조회, 질의, ...
+  - Queries allow the user to describe desired data.
+
+  select empno, ename, sal, job
+  from emp;
+
+  select sal, sal, sal, sal    -- 컬럼 복제
+  from emp;
+
+  select sum(sal), avg(sal), max(sal), min(sal)
+  from emp;
+
+  select empno, ename, sal, sal*1.3
+  from emp;
+
+# SELECT Statement
+  
+  * SELECT 문장을 작성하거나 해석할 때 권장 순서 (절대 실행순서 아님)
+
+  SELECT   deptno, sum(sal)  -- 4 (mandatory)
+  FROM     emp               -- 1 (mandatory)
+  WHERE    sal >= 1000       -- 2
+  GROUP BY deptno            -- 3 
+  HAVING   sum(sal) >= 2000  -- 5
+  ORDER BY deptno            -- 6
+  ;
+
+# Where절 이해
+
+  * candidate row를 검증해서 T, F, N 가운데 하나를 리턴하는 절인데
+    where절이 T를 리턴해야 후보행(candidate row)이 리턴된다.
+
+  select * from emp where sal >= 1500;
+  select * from emp where sal >= 1500 and job = 'SALESMAN';
+
+  select * from emp where comm = null;   -- 엉터리
+  select * from emp where comm is null;  -- 제대로
+
+  select ename, lower(ename), sal, sal * 1.2
+  from emp
+  where sal >= 1000;
+
+  drop table t1 purge;
+  create table t1 as select * from emp where 1 = 2;
+
+  drop table t1 purge;
+  create table t1 as 
+  select empno a, deptno b from emp where deptno = 10;
+
+# View 
+
+  - Named Select! 
+  - Query Transformation
+
+  create or replace view v1
+  as
+  select empno, ename
+  from emp
+  where deptno = 10;
+
+  select *
+  from v1
+  where ename like 'A%';
+ 
+# print_table 프로시져
+
+  - http://cafe.naver.com/n1books/14 첨부 파일 다운로드
+
+  SQL> @"C:\Users\student\Desktop\print_table .sql"
+
+  SQL> set serveroutput on 
+  SQL> exec print_table('select * from employees')
+
+  SQL> gran 
+
+  SQL> exec pt('select * from employees')
+  SQL> exec pt('select * from emp where ename = ''ALLEN'' ')
+
+  SQL> create or replace view v1
+       as
+       select e.empno, e.ename, d.*
+       from emp e, dept d
+       where e.ename like 'A%'
+       and d.deptno = 10;
+
+  SQL> exec pt('select * from v1')
+
+=====================
+ 1장
+=====================
+
+# 1-11 
+
+  가공 -> 연산 - 산술
+               - 연결
+               - 논리
+               - ...
+
+       -> 함수 - Vendor-supplied function - Single-row function
+                                          - Multiple-row function
+               - User-defined function    - Single-row function
+                                          - Multiple-row function
+
+# 1-15
+
+  select empno, 
+         sal, 
+         comm, 
+         sal*12 + nvl(comm, 0)    ann_sal, 
+         sal*12 + nvl(comm, 0) as ann_sal,
+         sal*12 + nvl(comm, 0)    "$Ann Sal"
+  from emp;
+
+# 1-20 concatenation operator, literal
+
+  select empno, ename||' is a '||job as sawon
+  from emp;
+
+  select empno,
+         'Dear '||ename||'! '||chr(10)||
+         'your salary from '||sal||' to '||sal*1.2 as kidding
+  from emp;
+
+  select 'drop table '||tname||
+         ' cascade constrants;' as commands
+  from tab
+  where tname like 'E%';
+
+# 1-23
+
+  select ename||'''s house is bigger than Tom''s'     from emp;
+  select ename||q'!'s house is bigger than Tom's!' from emp;
+  select ename||q'X's house is bigger than Tom'sX' from emp;
+
+# 1-24
+
+  select unique   deptno from emp;
+  select distinct deptno from emp;
+
+  select distinct deptno, job
+  from emp
+  order by 1, 2;
+
+  select empno, sal as salary
+  from emp
+  where salary > 1000;
+
+=====================
+ 2장
+=====================
+
+# 2-11
+
+  select * from emp
+  where mgr = 7698;
+
+  select * from emp
+  where mgr = 7839;
+
+  select * from emp
+  where mgr = 7788;
+
+    ---
+
+  select * from emp
+  where mgr = 7698
+  union all
+  select * from emp
+  where mgr = 7839
+  union all
+  select * from emp
+  where mgr = 7788;
+
+    ---
+
+  select * from emp
+  where mgr in (7698, 7839, 7788);
+
+  select * from emp
+  where mgr = 7698 or mgr = 7839 or mgr = 7788;
+
+    ---
+
+  select * from emp
+  where mgr not in (7698, 7839, 7788);
+
+  select * from emp
+  where mgr != 7698 and mgr != 7839 and mgr != 7788;
+
+# 2-12
+
+  select * from emp
+  where ename like 'A%';
+
+  select * from emp
+  where ename like '_____';
+
+   ---
+
+  >> 중간에 포함된 A_A 찾기
+
+  drop table t1 purge;
+
+  create table t1 (col1 varchar2(30));
+
+  insert into t1 values ('AAA');
+  insert into t1 values ('ABA');
+  insert into t1 values ('ACA');
+  insert into t1 values ('A_A');
+
+  commit;
+
+  select * from t1 where col1 like '%A_A%';              -- 엉터리
+  select * from t1 where col1 like '%A!_A%' escape '!';  -- 제대로
+
+# 2-14
+
+  select * from emp where comm = null;    -- 엉터리
+  select * from emp where comm is null;   -- 제대로
+
+  cf.
+
+     select * from emp where empno = empno;
+     select * from emp where comm = comm;
+
+# 2-23
+
+  select empno, ename, sal salary from emp order by sal;
+  select empno, ename, sal salary from emp order by salary;
+  select empno, ename, sal salary from emp order by 3;
+
+  select empno, ename, sal salary from emp order by hiredate;
+
+  select deptno, ename, sal from emp order by deptno, sal desc;
+
+  select * from emp order by comm;
+  select * from emp order by comm nulls first;
+
+  select * from emp order by comm desc;
+  select * from emp order by comm desc nulls last;
+
+# 실습
+
+  문제.월별 정렬 (가공한 결과에 의한 Order by)
+
+    select empno, hiredate, to_char(hiredate, 'MM')
+    from emp;
+
+    select empno, hiredate, to_char(hiredate, 'MM')
+    from emp
+    order by to_char(hiredate, 'MM');
+
+    select empno, hiredate
+    from emp
+    order by to_char(hiredate, 'MM');
+
+  문제.SQL Yellow p.117 상단
+
+    select to_char(hiredate, 'day') 
+    from emp
+    where rtrim(to_char(hiredate, 'day')) = 'tuesday';
+
+    select to_char(hiredate, 'day') 
+    from emp
+    where to_char(hiredate, 'day') like 'tues%';
+
+  문제.jb 출제
+
+    select empno, sal, sal*1.1, s.*
+    from emp e, salgrade s
+    order by 1;
+
+    select e.empno, 
+           e.sal, 
+           s.grade
+    from emp e, salgrade s
+    where e.sal >= s.losal and e.sal <= s.hisal
+    order by 1;
+
+    select e.empno, 
+           e.sal, 
+           (select grade 
+            from salgrade s
+            where e.sal >= s.losal and e.sal <= s.hisal) ret1,
+           e.sal*1.1, 
+           (select grade 
+            from salgrade s
+            where e.sal*1.1 >= s.losal and e.sal*1.1 <= s.hisal) ret2        
+    from emp e
+    order by 1;
+
+    select *
+    from (select e.empno, 
+                 e.sal, 
+                (select grade 
+                 from salgrade s
+                 where e.sal >= s.losal and e.sal <= s.hisal) ret1,
+                 e.sal*1.1, 
+                (select grade 
+                 from salgrade s
+                 where e.sal*1.1 >= s.losal and e.sal*1.1 <= s.hisal) ret2        
+          from emp e)
+    where ret1 != ret2
+    order by 1;
+
+========================
+ 3장, 4장 단일행 함수
+========================
+
+# 3-4 Argument
+
+  col user format a10
+
+  select sysdate, user, ename, initcap(ename) a,  substr(ename, 1, 2) b,  lower(substr(ename, 3)) c
+  from emp;
+
+  select substr(empno, 1, 2)||'****' as empno
+  from emp;
+
+# user-defined function
+
+  create or replace function tax (a number) return number
+  is
+  begin
+    return a*0.137;
+  end;
+  /
+
+  select empno, sal, tax(sal) as tax
+  from emp;
+
+-------------------
+ 문자 함수
+-------------------
+
+# 3-13 trim과 ltrim, rtrim
+
+  select ltrim('SOS', 'S')            from dual;
+  select trim(leading 'S' from 'SOS') from dual;
+
+  select rtrim('SOS', 'S')             from dual;
+  select trim(trailing 'S' from 'SOS') from dual;
+
+  select ltrim(rtrim('SOS', 'S'), 'S') from dual;
+  select trim(both 'S' from 'SOS')     from dual;
+
+    --
+
+  select ltrim('xyxYxyxy', 'xy')    from dual;
+  select trim('xy' from 'xyxYxyxy') from dual;   -- 에러
+
+# instr 함수
+
+  데이터의 단어수를 알수있는 방법 
+
+  drop table t1 purge;
+
+  create table t1 (no number, name varchar2(100));
+
+  insert into t1 values(1, 'oracle ora ora');
+  insert into t1 values(2, 'ora oracle ora oracle');
+  insert into t1 values(3, ' ora ora');
+  insert into t1 values(4, 'ora ora ');
+  insert into t1 values(5, 'ora ora');
+  insert into t1 values(6, 'ora');
+
+  commit;
+
+  col name format a30
+  col a    format 999
+
+  select no, name, instr(trim(' ' from name), ' ', 1, 2) a
+  from t1 ;
+ 
+  select no, name, instr(trim(' ' from name), ' ', 1, 2) a
+  from t1 
+  where instr(trim(' ' from name), ' ', 1, 2) > 0;
+
+# 3-13
+
+  문제.ENAME이 5자인 사원?
+
+    select empno, ename, job
+    from emp
+    where ename like '_____';
+
+    select empno, ename, job
+    from emp
+    where length(ename) = 5;
+
+  문제.ENAME에 'A'가 포함된 사원?
+
+    select empno, ename, job
+    from emp
+    where ename like '%A%';
+
+    select empno, ename, job
+    from emp
+    where instr(ename, 'A') >= 1;
+    
+  문제.SAL을 그래프로 나타내세요. 
+       * 하나가 100입니다. 반올림하세요.
+
+    select empno, sal, sal
+    from emp;
+
+    select empno, sal, round(sal/100)
+    from emp;
+
+    col stars format a70
+
+    select empno, sal, rpad(' ', round(sal/100)) as stars
+    from emp;
+
+    select empno, sal, rpad('*', round(sal/100), '*') as stars
+    from emp;
+
+  문제.숫자로만 이루어진 행 찾기
+
+    drop table t1 purge;
+    create table t1 (col1 varchar2(10));
+
+    insert into t1 values('37236');
+    insert into t1 values('A747');
+    insert into t1 values('788D1');
+    insert into t1 values('53');
+    insert into t1 values('68348');
+
+    commit;
+
+    해답 1.
+
+      select col1, lower(col1), upper(col1)
+      from t1;
+
+      select col1
+      from t1
+      where lower(col1) = upper(col1);
+
+    해답 2.
+
+      select col1, ltrim(col1, '0123456789')
+      from t1;
+
+      select col1
+      from t1
+      where ltrim(col1, '0123456789') is null;
+
+  문제.연속된 숫자 5개가 포함된 행 찾기
+
+    drop table t1 purge;
+
+    create table t1(col1 varchar2(1000));
+
+    insert into t1 values('이것은 12321이다');
+    insert into t1 values('3 곱하기 2는 6이다. 6 나누기 2는 3이다.');
+
+    commit;
+
+    select * from t_five;
+
+    col a format a40
+    col b format a40
+
+    select col1 a, 
+           translate(col1, '0123456789',
+                           '----------') b
+    from t1;
+
+    select col1
+    from t1
+    where translate(col1, '0123456789',
+                          '----------') like '%-----%';
+
+    cf.select translate('xYxxYzzxY', 'ax', 'a')
+       from dual;
+
+# 3-14
+
+  select ename, substr(ename, -1, 1), substr(ename, -3, 2)
+  from emp;
+
+  select ename
+  from emp
+  where substr(ename, -1, 1) = 'N';
+
+-------------------
+ 숫자 함수
+-------------------
+
+# round, trunc, mod, ceil, floor
+
+  select round(45.995, 2), 
+         round(45.995, -2),
+         round(654645.995, -2)
+  from dual;
+
+  select trunc(45.995, 2), 
+         trunc(45.995, -2)
+  from dual;
+
+  select empno, mod(empno, 2), mod(empno, 3), mod(empno, 5)
+  from emp
+  where mod(empno, 2) = 0;
+
+  select ceil(3.14),
+         floor(3.14)
+  from dual;
+
+# dual
+
+  - sys 소유의 테이블
+  - dummy 컬럼, x 값
+
+  select 100*1.3 + 200
+  from dual;
+
+  select ltrim('the king', 'the')
+  from dual;
+
+-------------------
+ 날짜 함수
+-------------------
+
+# 날짜 연산
+
+  date + number = date
+  date - number = date
+  date - date   = number
+ 
+  date * 2          : 연산 X
+  date + (date + 1) : 연산 X
+
+  alter session set nls_date_format = 'YYYY/MM/DD HH24:MI:SS';
+
+  select sysdate, 
+         sysdate + 3, 
+         sysdate + 3/24, 
+         sysdate + 12/(24*60), 
+         sysdate + 36/(24*60*60)
+  from dual;  
+
+  select sysdate, 
+         sysdate + 100,
+         sysdate + 1000,
+         sysdate + 10000
+  from dual;  
+
+  select sysdate - to_date('19720101', 'YYYYMMDD')
+  from dual;
+
+# 날짜 함수
+
+  alter session set nls_date_format = 'DD-MON-RR';
+
+  select empno, 
+         hiredate, 
+         months_between(sysdate, hiredate),
+         add_months(hiredate, 6)
+  from emp;
+
+  select sysdate, 
+         next_day(sysdate, 'mon')
+  from dual;
+  
+  select last_day(to_date('06-feb-17', 'DD-MON-RR'))
+  from dual;
+  
+# 3-31
+
+  일 : 01 ~ 15 : 탈락
+       16 ~ 31 : 반올림
+
+  월 : 01 ~ 06 : 탈락
+       07 ~ 12 : 반올림
+
+  select round(to_date('17-JUN-2016', 'DD-MON-YYYY'), 'month') from dual;
+  select round(to_date('17-JUN-2016', 'DD-MON-YYYY'), 'year')  from dual;
+
+  select empno, 
+         hiredate, 
+         trunc(hiredate, 'month'), 
+         trunc(hiredate, 'year')
+  from emp;
+
+  select empno, 
+         hiredate, 
+         trunc(hiredate, 'month'), 
+         trunc(hiredate, 'year')
+  from emp
+  where trunc(hiredate, 'month') = '01-FEB-81';
+
+  select empno, 
+         hiredate, 
+         trunc(hiredate, 'month'), 
+         trunc(hiredate, 'year')
+  from emp
+  where trunc(hiredate, 'year') = '01-JAN-82';
+
+-------------------
+ 변환 함수
+-------------------
+
+# Implicit Conversion
+
+  - expression일 경우
+
+    select 100 + '100'
+    from dual;
+
+    select * 
+    from emp
+    where empno = '7788';
+
+  - assignment일 경우
+
+    select empno, substr(ename, '1', '2')
+    from emp;
+
+# to_char : date -> char
+
+  select to_char(hiredate, 'YYYY YYYY YYYY') from emp;
+
+  select to_char(hiredate, 'YEAR Year year') from emp;
+
+  select to_char(hiredate, 'Year Month mon Day dy') from emp;
+
+  select hiredate, to_char(hiredate, 'YYYY Q MM WW W DDD DD D Day') from emp;
+
+  select hiredate, to_char(hiredate, 'RM Rm rm') from emp;
+
+  select to_char(hiredate, 'DD Ddsp ddth ddspth ddthsp') from emp;
+
+  select to_char(sysdate, 'hh24:mi:ss') from dual;
+
+  select to_char(sysdate, 'sssss') from dual;
+
+  select '오늘은 '||to_char(hiredate, 'Year Mon Dy')||'요일입니다.'
+  from emp;
+
+  select to_char(hiredate, '"오늘은" YYYY"년" MM"월" DD"일입니다." ')
+  from emp;
+
+  cf.fm : fill mode
+
+     select to_char(hiredate, 'fmYear Month DD fmHH24:MI:SS')
+     from emp;
+
+# to_char : number -> char
+
+  select empno,
+         sal, 
+         to_char(sal, '$999,999.99'), 
+         to_char(sal, 'L000,000.00', 'nls_currency=\')
+  from emp;
+  
+# to_number
+
+  select '455674', to_number('455674')
+  from dual;
+
+# to_date
+
+  select to_date('07/08/09', 'RR/MM/DD')
+  from dual;
+
+-------------------
+ 일반 함수
+-------------------
+
+# 4-20
+ 
+  fx = format exact
+
+  SELECT last_name, hire_date
+  FROM   employees
+  WHERE  hire_date = TO_DATE('May 24, 1999', 'fxMonth DD, YYYY');
+
+# 4-31 nvl, nvl2
+
+  select empno, 
+         ename, 
+         sal,
+         comm,
+         sal*12 + nvl(comm, 0)               as ann_sal1,
+         nvl2(comm, sal*12+comm, sal*12)     as ann_sal2,
+         nvl2(comm, 'sal*12+comm', 'sal*12') as gubun
+  from emp;
+
+# 4-32 nullif
+
+  select last_name, 
+         first_name, 
+         nullif(length(last_name), length(first_name)) as ret
+  from employees;
+
+  select last_name, 
+         first_name
+  from employees
+  where nullif(length(last_name), length(first_name))  is null;
+
+# 4-33 coalesce
+
+  drop table t1 purge;
+
+  create table t1
+  as
+  select comm a, mgr b, empno c
+  from emp;
+
+  select * from t1;
+
+  select a, b, c, coalesce(a, b, c, 0) d
+  from t1;
+
+  cf.select a, b, c, nvl(nvl(nvl(a, b), c), 0) d
+     from t1;
+
+# 4-37 Decode 함수와 Case 표현식
+
+ 예제1.
+
+  select /* decode 함수 */
+         deptno, 
+         sal, 
+         decode(deptno, 10, sal*1.1, 
+                        20, sal*1.2, 
+                            sal) as whatif
+  from emp;
+
+  select /* simple case 표현식 */
+         deptno, 
+         sal,
+         case deptno when 10 then sal*1.1
+                     when 20 then sal*1.2
+                     else         sal
+         end as whatif 
+  from emp;
+
+  select /* searched case 표현식 */
+         deptno, 
+         sal,
+         case when deptno = 10 then sal*1.1
+              when deptno = 20 then sal*1.2
+              else                  sal
+         end as whatif
+  from emp;
+
+ 예제2.
+
+    select empno, 
+           sal,
+           sal/2000,
+           trunc(sal/2000)
+    from emp;
+
+    select empno, 
+           sal,
+           decode(trunc(sal/2000), 0, 'low', 1, 'mid', 'high') as gubun
+    from emp;
+
+    select empno, 
+           sal,
+           case trunc(sal/2000) when 0 then 'low'
+                                when 1 then 'mid'
+                                else        'high'
+           end as gubun
+    from emp;
+
+    select empno, 
+           sal,
+           case when sal < 2000 then 'low'
+                when sal < 4000 then 'mid'
+                else                 'high'
+           end as gubun 
+    from emp;
+
+# 문제.부서별 업무별 급여합을 매트릭스 형태로 쿼리하세요
+
+  select deptno, sal, sal, sal, sal
+  from emp;
+
+  select deptno, sal, decode(deptno, 10, sal) d10, sal, sal
+  from emp;
+
+  select deptno, 
+         sal, 
+         decode(deptno, 10, sal) d10,
+         decode(deptno, 20, sal) d20,
+         decode(deptno, 30, sal) d30
+  from emp;
+
+  select  
+         sum(sal) total, 
+         sum(decode(deptno, 10, sal)) d10,
+         sum(decode(deptno, 20, sal)) d20,
+         sum(decode(deptno, 30, sal)) d30
+  from emp;
+
+  select job, 
+         nvl(sum(sal), 0) total, 
+         nvl(sum(decode(deptno, 10, sal)), 0) d10,
+         nvl(sum(decode(deptno, 20, sal)), 0) d20,
+         nvl(sum(decode(deptno, 30, sal)), 0) d30
+  from emp
+  group by job
+  order by job;
+
+========================
+ 5장 복수행 함수
+========================
+
+# 집단별 집계
+
+  select sum(sal), avg(sal)
+  from emp;
+
+  select deptno, sum(sal), avg(sal)
+  from emp
+  group by deptno
+  order by deptno;
+
+  select deptno, job, sum(sal), avg(sal)
+  from emp
+  group by deptno, job
+  order by deptno, job;
+
+  select /* 가공한 결과에 의한 Group by */
+         to_char(hiredate, 'yyyy') as year, avg(sal)
+  from emp
+  group by to_char(hiredate, 'yyyy')
+  order by year;
+
+    --
+
+  select empno, 
+         sal, 
+         case when sal < 2000 then '1'
+              when sal < 4000 then '2'
+              else                 '3'
+         end as gubun
+  from emp
+  order by gubun, sal;
+  
+  select case when sal < 2000 then '1 : < 2000'
+              when sal < 4000 then '2 : < 4000'
+              else                 '3 : >= 4000'
+         end as gubun,
+         count(*),
+         sum(sal),
+         avg(sal)
+  from emp
+  group by case when sal < 2000 then '1 : < 2000'
+                when sal < 4000 then '2 : < 4000'
+                else                 '3 : >= 4000'
+           end
+  order by gubun;
+
+# 에러 대처
+
+  - 복수행 함수로 감싼 컬럼 이외의 모든 컬럼은 
+    group by절에 나타나야 한다. 단, 리터럴은 예외
+
+  select sum(sal)
+  from emp;
+
+  select sum(sal)
+  from emp
+  group by deptno;
+
+  select deptno, sum(sal)   -- 에러
+  from emp;
+
+  select deptno, sum(sal)
+  from emp
+  group by deptno;
+
+  select deptno, sum(sal)
+  from emp
+  group by deptno, job;
+
+# where vs having
+
+  select deptno, sum(sal)
+  from emp
+  where deptno != 20
+  group by deptno;
+
+  select deptno, sum(sal)
+  from emp
+  group by deptno
+  having deptno != 20;
+
+    --
+
+  select deptno, sum(sal)
+  from emp
+  where sum(sal) < 10000   /* 에러 */
+  group by deptno;
+
+  select deptno, sum(sal)
+  from emp  
+  group by deptno
+  having sum(sal) < 10000;
+
+# 5-5
+
+  select avg(all sal), avg(distinct sal)
+  from emp;
+
+# 5-6
+
+  - 모든 복수행 함수는 null을 무시합니다. 단, count(*)는 예외
+
+  select sum(comm), avg(comm)
+  from emp;
+ 
+    --
+
+  select comm, 
+         nvl(comm, 0)
+  from emp;
+
+  select avg(comm) a,         /* 커미션 받는 사원들의 평균 커미션 */
+         avg(nvl(comm, 0)) b  /* 사원 1인당 평균 커미션 */
+  from emp;
+
+    --
+
+  drop table t1 purge;
+
+  create table t1 (col1 number);
+
+  insert into t1 values (1000);
+  insert into t1 values (1000);
+  insert into t1 values (2000);
+  insert into t1 values (2000);
+  insert into t1 values (null);
+  insert into t1 values ('');
+ 
+  commit;
+
+  select count(*), count(col1), count(distinct col1)
+  from t1;
+
+========================
+ 6장 조인
+========================
+
+# Join
+
+  * 용어
+
+    select *
+    from emp e, dept d            -- Join Statement
+    where e.deptno = d.deptno     -- Join Predicate
+    and e.sal >= 1000             -- Non-Join Predicate
+    and e.job = 'MANAGER'         -- Non-Join Predicate
+    and d.deptno = 10             -- Non-Join Predicate(Single-Row Predicate)
+    order by 1;
+
+  * Syntax
+
+    [1] Oracle Syntax 
+
+        - Equi join
+        - NonEqui join
+        - Self join
+        - Outer join
+
+    [2] SQL:1999 Syntax
+
+        - Cross join
+        - Natural join
+        - Join Using
+        - Join On
+        - Outer join
+
+  * 조인은 곱셈 연산이다!
+
+    select count(*)
+    from (select level as no from dual connect by level <= 100),
+         (select level as no from dual connect by level <= 100),
+         (select level as no from dual connect by level <= 100);
+
+# Join >> Oracle Syntax 
+
+ (1) Equi join
+
+  select *
+  from emp, dept
+  order by 1;
+
+  select *
+  from emp e, dept d
+  where e.deptno = d.deptno
+  order by 1;
+
+ (2) NonEqui join
+
+  select *
+  from emp, salgrade
+  order by 1;
+
+  select *
+  from emp e, salgrade s
+  where e.sal >= s.losal and e.sal <= s.hisal
+  order by 1;
+
+  select s.grade, count(*), avg(e.sal)
+  from emp e, salgrade s
+  where e.sal >= s.losal and e.sal <= s.hisal
+  group by s.grade
+  order by grade desc;
+
+ (3) Self join
+  
+  select *
+  from emp w, emp m
+  order by 1;
+
+  select *
+  from emp w, emp m
+  where w.mgr = m.empno
+  order by 1;
+
+  select w.empno, w.ename, m.empno, m.ename
+  from emp w, emp m
+  where w.mgr = m.empno
+  order by 1;
+
+  # 문제.ALLEN 보다 SAL이 많은 사원?
+
+    select *
+    from emp e, emp a;
+ 
+    select *
+    from emp e, emp a
+    where a.empno = 7499;
+
+    select *
+    from emp e, emp a
+    where a.empno = 7499
+    and e.sal > a.sal;
+
+    select e.empno, 
+           e.sal, 
+           a.empno, 
+           a.sal, 
+           e.sal - a.sal as diff
+    from emp e, emp a
+    where a.empno = 7499
+    and e.sal > a.sal
+    order by diff desc;
+
+  cf.상호 관련 서브쿼리로 해결
+
+     select empno, ename, mgr, (select ename from emp where empno = e.mgr) as ename
+     from emp e; 
+
+ (4) Outer join
+
+  select *
+  from emp w, emp m
+  where w.mgr = m.empno (+)
+  order by 1;
+
+  문제.누적합 구하기
+
+           A          B      누적
+    -------- ---------- ---------
+        7369        800       800
+        7499       1600      2400
+        7521       1250      3650
+
+    drop table t1;
+
+    create table t1 
+    as 
+    select empno c1, sal c2
+    from emp
+    where rownum <= 3;
+
+    select *
+    from t1;
+
+    select *
+    from t1 a, t1 b;
+
+    select *
+    from t1 a, t1 b
+    where a.c1 >= b.c1
+    order by 1, 2;
+
+    select a.c1, a.c2, sum(b.c2) as cumulative
+    from t1 a, t1 b
+    where a.c1 >= b.c1
+    group by a.c1, a.c2
+    order by 1, 2;
+
+# Join >> SQL:1999 Syntax 
+
+ (1) Cross join
+
+     select *
+     from emp CROSS JOIN dept;
+
+ (2) Natural join
+
+     select *
+     from emp e NATURAL JOIN dept d;
+
+     select *
+     from emp e NATURAL JOIN dept d
+     where e.job = 'MANAGER';
+
+     ==> Natural join의 문제 : 같은 이름의 컬럼이 모두 조인 조건에 사용된다!
+
+         select *
+         from employees e NATURAL JOIN departments d;
+
+        (3) Natural join의 문제 해결 방법 1 : Join Using
+
+            select *
+            from employees e JOIN departments d USING (department_id);
+
+        (4)  Natural join의 문제 해결 방법 2 : Join On
+
+            select *
+            from employees e JOIN departments d ON (e.department_id = d.department_id);
+
+ (5) Outer join
+
+     select *
+     from employees e, departments d
+     where e.department_id = d.department_id (+);
+
+     select *
+     from employees e LEFT OUTER JOIN departments d ON (e.department_id = d.department_id);
+
+        ---
+
+     select *
+     from employees e, departments d
+     where e.department_id (+) = d.department_id
+
+     select *
+     from employees e RIGHT OUTER JOIN departments d ON (e.department_id = d.department_id);
+
+        ---
+
+     select * 
+     from employees e, departments d
+     where e.department_id (+) = d.department_id (+);  -- 에러
+
+     select *
+     from employees e FULL OUTER JOIN departments d ON (e.department_id = d.department_id);
+
+# Oracle Syntax vs SQL:1999 Syntax
+
+  select *
+  from emp e, dept d
+  where e.deptno = d.deptno;
+
+  => select *
+     from emp e NATURAL JOIN dept d;
+
+  => select *
+     from emp e JOIN dept d USING (deptno);
+
+  => select *
+     from emp e JOIN dept d ON (e.deptno = d.deptno);
+
+   ---
+
+  select *
+  from emp e, salgrade s
+  where e.sal >= s.losal and e.sal <= s.hisal;
+
+  => select *
+     from emp e JOIN salgrade s ON (e.sal >= s.losal and e.sal <= s.hisal);
+
+   ---
+
+  select *
+  from emp w, emp m
+  where w.mgr = m.empno;
+
+  => select *
+     from emp w JOIN emp m ON (w.mgr = m.empno);
+
+# Note. Cartesian Product는 항상 나쁘다??!!
+
+  select deptno, job, sum(sal)
+  from emp
+  group by deptno, job
+  union all
+  select deptno, null, sum(sal)
+  from emp
+  group by deptno
+  union all
+  select null, null, sum(sal)
+  from emp
+  order by 1, 2;
+
+     ---
+
+  select *
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         job, 
+         sum_sal,
+         no
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         decode(n.no, 1, job) as job,
+         sum_sal,
+         no
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  order by n.no;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         decode(n.no, 1, job) as job,
+         sum(sum_sal)
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e,
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  group by decode(n.no, 1, deptno, 2, deptno),
+           decode(n.no, 1, job)
+  order by 1, 2;
+
+  select decode(n.no, 1, deptno, 2, deptno) as deptno,
+         decode(n.no, 1, job) as job,
+         sum(sum_sal)
+  from (select deptno, job, sum(sal) as sum_sal
+        from emp
+        group by deptno, job) e
+        CROSS JOIN
+       (select level as no
+        from dual
+        connect by level <= 3) n
+  group by decode(n.no, 1, deptno, 2, deptno),
+           decode(n.no, 1, job)
+  order by 1, 2;
+
+
+     ---
+
+  select deptno, job, sum(sal)
+  from emp
+  group by rollup(deptno, job);
+
+# 3개 이상 테이블 조인
+
+  select e.empno, e.ename, e.sal, d.*, s.*  
+  from emp e, dept d, salgrade s
+  where e.deptno = d.deptno
+  and e.sal between s.losal and s.hisal
+  and e.sal >= 1200
+  and d.loc = 'CHICAGO';
+
+  select e.empno, e.ename, e.sal, d.*, s.*  
+  from emp e JOIN dept d     ON (e.deptno = d.deptno)
+             JOIN salgrade s ON (e.sal between s.losal and s.hisal)
+  where e.sal >= 1200
+  and   d.loc = 'CHICAGO';
+
+========================
+ 7장 서브쿼리
+========================
+
+# 서브쿼리
+
+  - 다른 SQL에 포함된 SELECT
+  - 해석 순서 : 서브쿼리 부터 
+  - 실행 순서 : 실행 계획을 봐야 알 수 있음
+
+# 서브쿼리 분류
+
+  - Single-row subquery
+  - Multiple-row subquery
+  - Multiple-column subquery
+
+  - Inline-view : from절의 subquery
+
+  - scalar subquery -> 1행 1열 리턴하는 평범한 서브쿼리
+                    -> group by를 제외한 모든 절에 나타날 수 있음
+
+  - correlated subquery
+
+------------------------
+ Single-row subquery
+------------------------
+
+  문제.CLARK보다 많은 급여를 받는 사원
+
+    col sal new_value v_sal
+
+    select sal
+    from emp
+    where ename = 'CLARK';
+
+    select empno, sal
+    from emp
+    where sal > &v_sal;
+
+       --
+
+    select e.empno, e.sal
+    from emp e, emp c
+    where c.ename = 'CLARK'
+    and e.sal > c.sal;
+
+       --
+
+    select empno, sal
+    from emp
+    where sal > (select sal
+                 from emp
+                 where ename = 'CLARK');
+
+  문제.회사의 평균 급여보다 많은 급여를 받는 사원
+
+    select empno, sal
+    from emp
+    where sal > (select avg(sal)
+                 from emp);
+
+  문제.최저 급여자
+
+    select empno, sal
+    from emp
+    where sal = (select min(sal)
+                 from emp);
+
+---------------------------
+ Multiple-row subquery
+---------------------------
+  
+  문제.근무하는 사원이 있는 부서
+
+    select * 
+    from dept
+    where deptno in (select deptno
+                     from emp);
+
+  문제.여러 건을 부등호 비교해야 할 경우
+
+    select empno, sal
+    from emp
+    where sal > all (select sal 
+                     from emp 
+                     where job = 'SALESMAN');
+
+    select empno, sal
+    from emp
+    where sal > (select max(sal)
+                 from emp 
+                 where job = 'SALESMAN');
+
+      --
+
+    select empno, sal
+    from emp
+    where sal < all (select sal 
+                     from emp 
+                     where job = 'SALESMAN');
+
+    select empno, sal
+    from emp
+    where sal < (select min(sal)
+                 from emp 
+                 where job = 'SALESMAN');
+
+      --
+
+    select empno, sal
+    from emp
+    where sal > any (select sal 
+                     from emp 
+                     where job = 'SALESMAN');
+
+    select empno, sal
+    from emp
+    where sal > (select min(sal)
+                 from emp 
+                 where job = 'SALESMAN');
+
+
+      --
+
+    select empno, sal
+    from emp
+    where sal < any (select sal 
+                     from emp 
+                     where job = 'SALESMAN');
+
+    select empno, sal
+    from emp
+    where sal < (select max(sal)
+                 from emp 
+                 where job = 'SALESMAN');
+
+# Inline view
+
+  문제.소속 부서의 평균 급여보다 많은 급여를 받는 사원
+
+    select deptno, avg(sal) avg_sal
+    from emp
+    group by deptno;
+
+    select e.empno, e.sal, d.*
+    from emp e,
+        (select deptno, avg(sal) avg_sal
+         from emp
+         group by deptno) d
+    where e.deptno = d.deptno
+    and e.sal > d.avg_sal;
+
+# Scalar Subqeury
+
+  select empno, ename, sal, (select avg(sal) from emp) as avg_sal
+  from emp;
+
+  select empno, ename, mgr, (select ename from emp where empno = e.mgr) as mgr_name
+  from emp e;
+
+  select empno, ename, deptno
+  from emp e
+  order by (select dname 
+            from dept 
+            where deptno = e.deptno);
+
+========================
+ 8장 Set 연산자
+========================
+
+========================
+ 9장 DML
+========================
+
+# DML
+
+  drop table t1 purge;
+
+  create table t1 
+  (no number(2), 
+   loc varchar2(10) default 'SEOUL');
+
+  insert into t1 values (10, 'BUSAN');         -- 성공
+
+  insert into t1     values (20);              -- 에러
+  insert into t1(no) values (20);              -- 성공 
+
+  select * from t1;
+
+# 9-12
+
+  insert into t1
+  select deptno, loc
+  from dept
+  where deptno > 20;
+
+  select * from t1;  
+
+# 9-15 Implicit query
+
+  http://gseducation.blog.me/20125786704
+
+# 9-25
+
+                       공간반납                  Rollback 가능 여부
+
+   drop table t1;        몽땅 반납                  X
+  
+   truncate table t1;    최초 크기만 남기고 반납    X
+
+   delete from t1;       전혀 반납하지 않음         O
+
+# TCL, 읽기 일관성, Lock 및 Deadlock
+
+  [Session 1]                  [Session 2]
+
+  * 읽기 일관성
+
+  drop table books purge; 
+
+  create table books
+  (no number,
+   name varchar2(10));
+
+  insert into books
+  values (1000, 'ABC');
+
+  insert into books
+  values (2000, 'SQL');
+
+  select * from books;
+
+                               select * from books;
+
+  commit;
+
+                               select * from books;
+
+  * Lock
+
+  update books
+  set name = 'JAVA'
+  where no = 1000;
+
+  select * from books;
+
+                               select * from books;
+
+                               update books
+                               set name = 'JAVA'
+                               where no = 1000;
+                               | waiting!
+
+  commit;
+
+                               commit;
+
+  * Deadlock
+
+  update books
+  set name = 'SQL'
+  where no = 1000;
+
+                               update books
+                               set name = 'SUN'
+                               where no = 2000;
+
+  update books
+  set name = 'C++'
+  where no = 2000;
+  | waiting!
+                               update books
+                               set name = 'Solaris'
+                               where no = 1000;
+                               | waiting!
+
+  ORA-00060: deadlock detected 
+  while waiting for resource
+
+  rollback;
+
+# 9-45
+
+  select e.empno, e.ename, e.sal
+  from emp e
+  where deptno in (select deptno
+                   from dept
+                   where loc = 'DALLAS');
+
+  select e.empno, e.ename, e.sal
+  from emp e, dept d
+  where d.loc = 'DALLAS'
+  and e.deptno = d.deptno
+  for update of sal;
+
+========================
+ 10장 Table
+========================
+
+# 10-5
+
+  - http://orapybubu.blog.me/40045704831
+  - https://docs.oracle.com/cd/E11882_01/server.112/e41084/ap_keywd001.htm#SQLRF55621
+
+# 10-7
+
+  * Data Integrity : 비지니스 룰을 기준으로 판단
+
+  drop table e1 purge;
+  drop table d1 purge;
+
+  create table d1
+  (dno   number(2), 
+   dname varchar2(30), 
+   loc   varchar2(30));
+
+  create table e1
+  (empno  number(4), 
+   ename  varchar2(30), 
+   sal    number(10, 2), 
+   hp     varchar2(11),
+   deptno number(2));  
+
+  select table_name, tablespace_name
+  from user_tables
+  where table_name in ('D1', 'E1');
+
+  insert into d1 
+  values (10, 'SALES', 'SEOUL');
+
+  insert into d1 
+  values (10, 'MARKETING', 'SUWON');
+
+  select * from d1;
+
+     ---
+
+  drop table e1 purge;
+  drop table d1 purge;
+
+  create table d1
+  (dno   number(2)    primary key, 
+   dname varchar2(30) not null, 
+   loc   varchar2(30));
+
+  create table e1
+  (empno  number(4)     primary key, 
+   ename  varchar2(30)  not null, 
+   sal    number(10, 2) check(sal >= 1000), 
+   hp     varchar2(11)  not null unique,
+   deptno number(2)     references d1(dno)); 
+
+  select table_name, tablespace_name
+  from user_tables
+  where table_name in ('D1', 'E1');
+
+  select table_name, 
+         constraint_name, 
+         constraint_type, 
+         search_condition
+  from user_constraints
+  where table_name in ('D1', 'E1');
+
+  select table_name, index_name
+  from user_indexes
+  where table_name in ('D1', 'E1');  
+
+     ---
+
+  >> column-level constraint
+
+  drop table e1 purge;
+  drop table d1 purge;
+
+  create table d1
+  (dno   number(2)    constraint d1_dno_pk   primary key, 
+   dname varchar2(30) constraint d1_dname_nn not null, 
+   loc   varchar2(30));
+
+  create table e1
+  (empno  number(4)     constraint e1_empno_pk  primary key, 
+   ename  varchar2(30)  constraint e1_ename_nn  not null, 
+   sal    number(10, 2) constraint e1_sal_ck    check(sal >= 1000), 
+   hp     varchar2(11)  constraint e1_hp_nn     not null
+                        constraint e1_hp_uk     unique,
+   deptno number(2)     constraint e1_deptno_fk references d1(dno)); 
+
+  select table_name, tablespace_name
+  from user_tables
+  where table_name in ('D1', 'E1');
+
+  select table_name, 
+         constraint_name, 
+         constraint_type, 
+         search_condition
+  from user_constraints
+  where table_name in ('D1', 'E1');
+
+  select table_name, index_name
+  from user_indexes
+  where table_name in ('D1', 'E1');  
+
+     ---
+
+  >> table-level constraint
+
+  drop table e1 purge;
+  drop table d1 purge;
+
+  create table d1
+  (dno   number(2), 
+   dname varchar2(30), 
+   loc   varchar2(30),
+     constraint d1_dno_pk   primary key(dno),
+     constraint de_dname_nn check(dname is not null)
+  );
+
+  create table e1
+  (empno  number(4), 
+   ename  varchar2(30), 
+   sal    number(10, 2), 
+   hp     varchar2(11),
+   deptno number(2),
+     constraint e1_empno_pk  primary key(empno),
+     constraint e1_ename_nn  check(ename is not null),
+     constraint e1_sal_ck    check(sal >= 1000),
+     constraint e1_hp_nn     check(hp is not null),
+     constraint e1_hp_uk     unique(hp),
+     constraint e1_deptno_fk foreign key(deptno) references d1(dno)
+  );  
+
+  cf.두 개 이상의 컬럼에 하나의 제약을 설정하려면
+     반드시 table-level constraint 문법을 사용해야 함
+
+      create table t_jumin
+      (no  number(10),
+       ju1 varchar2(8),
+       ju2 varchar2(7),
+         unique(ju1, ju2));
+
+# 10-9 Pseudocolumn
+
+  https://docs.oracle.com/cd/B28359_01/server.111/b28286/pseudocolumns.htm#SQLRF0025
+
+  - ROWID  Pseudocolumn
+
+    select rowid, e.* 
+    from emp e;
+
+  - ROWNUM Pseudocolumn
+
+    select rownum, e.* 
+    from emp e;
+
+    select rownum, e.* 
+    from emp e 
+    where sal > 1500;	
+
+  - pseudocolumn vs functions without arguments 
+  
+    select rownum, rowid, sysdate, user, empno, ename
+    from emp;
+
+# 10-12
+
+  문자 - 고정길이  : char        t1.ename char(10)     <- scott
+       - 가변길이  : varchar2    t2.ename varchar2(10) <- scott
+       - 2G 길이   : long
+       - 128T 길이 : clob  
+
+  숫자 - 정수              : number(4)
+       - 고정소수점(fixed) : number(10, 2)
+       - 부동소수점(float) : number
+
+       -> http://gseducation.blog.me/20095938837
+
+  날짜 - date   
+       - timestamp 
+       - interval
+
+  기타 - raw
+       - long raw
+       - LOB : clob, blob, bfile
+
+=========================================
+ 11장 View, Sequence, Index, Synonym
+=========================================
+
+# View
+  
+  - Named Select!
+  - Query Transformation
+  - 집합의 무한 확장
+  - Simple 뷰 vs Complex 뷰
+
+  >> Simple 뷰
+
+  create or replace view 부서
+  as
+  select deptno 부서번호, dname 부서이름, loc 지역
+  from dept;
+
+  create or replace view v1
+  as
+  select empno, ename, job, deptno
+  from emp;
+
+  create or replace view v2
+  as
+  select empno, ename, job, sal, hiredate, deptno
+  from emp;
+
+  select * from 부서;
+
+  grant select 
+  on v1 
+  to public;
+
+  select * from dream30.v1;
+
+  grant select 
+  on v2 
+  to dream01, dream02;
+
+  >> Complex 뷰
+
+  create or replace view v3
+  as
+  select empno, sal, comm, sal*12 + nvl(sal, 0) as ann_sal
+  from emp;
+
+  create or replace view v4 (dno, sumsal, avgsal, cnt, stddev, variance)
+  as
+  select deptno, sum(sal), avg(sal), count(*), stddev(sal), variance(sal)
+  from emp
+  group by deptno;
+
+  select * from v3;
+
+  select * from v4;
+
+  >> update 가능 컬럼 확인
+
+    * http://orapybubu.blog.me/40035845854
+
+  alter table emp  add primary key(empno);
+  alter table dept add primary key(deptno);
+
+  create or replace view v5
+  as
+  select e.empno, e.ename, e.sal, d.deptno, d.loc
+  from emp e, dept d
+  where e.deptno = d.deptno;
+
+  select * 
+  from user_updatable_columns
+  where table_name in ('V1','V2','V3','V4','V5');
+
+# 뷰 확인
+
+  set long 2000
+
+  select view_name, text
+  from user_views;
+
+# 11-14 뷰와 DML
+
+  drop table t1 purge;
+  create table t1 as select * from dept;
+
+    --
+  
+  create or replace view dv1 
+  as 
+  select deptno, dname, loc from t1;
+  
+  insert into dv1 values (50, 'MARKETING', 'SEOUL');
+
+  select * from t1;
+
+    --
+
+  create or replace view dv2
+  as 
+  select distinct deptno, dname, loc from t1;
+  
+  delete from dv2
+  where deptno = 50;   -- 에러 : ORA-01732: data manipulation operation not legal on this view
+
+    --
+
+  create or replace view dv3
+  as 
+  select deptno, initcap(dname) dname, loc from t1;
+  
+  select * from dv3;
+
+  update dv3
+  set dname = 'HR'
+  where deptno = 30;  -- ORA-01733: virtual column not allowed here
+
+  update dv3
+  set loc = 'JEONJU'
+  where deptno = 30; 
+
+    --
+ 
+  alter table t1 modify(loc not null);
+
+  create or replace view dv4
+  as 
+  select deptno, dname from t1;
+  
+  insert into dv4
+  values (60, 'SECRET');
+
+# 11-17 with check option
+
+  drop table t1 purge;
+
+  create table t1 
+  as
+  select empno, deptno
+  from emp;
+
+  create or replace view v1
+  as
+  select empno, deptno
+  from t1
+  where deptno = 20
+  with check option constraint v1_deptno_ck;
+
+  select * from v1;
+
+  insert into v1
+  values (9999, 10);  -- ORA-01402: view WITH CHECK OPTION where-clause violation
+
+  select * from t1;
+
+# Sequence
+
+  * 채번 : http://orapybubu.blog.me/40020473578
+
+  drop table t1 purge;
+  create table t1 (no number, name varchar2(10));
+
+  drop sequence seq1;
+  create sequence seq1
+  start with 1 
+  increment by 1
+  cache 20;
+
+  insert into t1
+  values (seq1.nextval, '&user_input');
+
+  insert into t1
+  values (seq1.nextval, '&user_input');
+
+  select * from t1;
+
+  commit;
+
+  select seq1.currval 
+  from dual;
+
+# Index
+
+  create index emp_deptno_idx on emp(deptno);
+  create index emp_job_idx    on emp(job);
+
+  select deptno, rowid from emp order by 1, 2;
+  select job, rowid    from emp order by 1, 2;
+
+  select rowid, e.* from emp e;
+
+  select * from emp
+  where comm >= 0
+
+# Synonym
+
+  create synonym sawon for emp;
+
+  select * from sawon;
+
+  drop synonym sawon;
+
+  create synonym d30v1 for dream30.v1;
+
+  select * from d30v1;
+ 
+===========================================
+ SQL for Aggregation in Data Warehouses 
+===========================================
+
+  - http://docs.oracle.com/cd/E11882_01/server.112/e25554/aggreg.htm#DWHSG020
+
+  select deptno, job, sum(sal)
+  from emp
+  group by deptno, job;
+
+# Rollup - 컬럼이 n개면 n+1가지 결과가 리턴됨
+         - 컬럼의 나열 순서가 중요함
+
+  select deptno, job, sum(sal)
+  from emp
+  group by rollup(deptno, job);
+
+  select deptno, job, sum(sal)
+  from emp
+  group by grouping sets((deptno, job), (deptno), ());
+
+# Cube - 컬럼이 n개면 2^n가지 결과가 리턴됨
+       - 컬럼의 나열 순서가 중요하지 않음
+
+  select deptno, job, sum(sal)
+  from emp
+  group by cube(deptno, job);
+
+  select deptno, job, sum(sal)
+  from emp
+  group by grouping sets((deptno, job), (deptno), (job), ());
+
+# group by에 사용되는 컬럼이 3개인 경우
+
+  select *
+  from emp e, (select level as no
+               from dual
+               connect by level <= 2) t;
+
+  drop table t1 purge;
+
+  create table t1
+  as
+  select decode(no, 1, empno, empno+1000) as empno, 
+         ename, 
+         round(sal * (1 + dbms_random.value)) as sal,
+         job,
+         decode(no, 1, 'M', 'W') as gender,
+         deptno
+  from emp e, (select level as no 
+               from dual 
+               connect by level <= 2) t;
+ 
+  select * from t1;
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by deptno, job, gender
+  order by 1, 2, 3;
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by rollup(deptno, job, gender);
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by grouping sets((deptno, job, gender), (deptno, job), (deptno), ());
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by cube(deptno, job, gender);
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by grouping sets((deptno, job, gender), (deptno, job), (deptno, gender), (job, gender), (deptno), (job), (gender), ());
+
+# Grouping 함수
+
+  drop table t2 purge;
+
+  create table t2 
+  as
+  select * from emp;
+ 
+  update t2 
+  set job = null 
+  where rownum = 1;
+
+  select * from t2;
+
+  >> 소계만 남기기 : Grouping 함수를 사용하지 않으면
+
+  select deptno, job, sum(sal)
+  from t2
+  group by rollup(deptno, job);
+
+  with t as (select deptno, job, sum(sal) sum_sal
+             from t2
+             group by rollup(deptno, job))
+  select *
+  from t
+  where deptno is not null
+  and job is null;
+
+  with t as (select deptno, job, sum(sal) sum_sal
+             from t2
+             group by rollup(deptno, job))
+  select deptno, job, max(sum_sal) as sum_sal
+  from t
+  where deptno is not null
+  and job is null
+  group by deptno, job;
+
+  >> 소계만 남기기 : Grouping 함수를 사용하면
+
+  select deptno, job, sum(sal), grouping(deptno), grouping(job)
+  from t2
+  group by rollup(deptno, job);
+
+  select *
+  from (select deptno, job, sum(sal), grouping(deptno) g_deptno, grouping(job) g_job
+        from t2
+        group by rollup(deptno, job))
+  where g_deptno = 0
+  and   g_job in (0, 1);
+
+  cf.
+
+     select deptno, job, gender, avg(sal), grouping(deptno), grouping(job), grouping(gender)
+     from t1
+     group by cube(deptno, job, gender);
+
+# Grouping Sets
+
+  select deptno, job, gender, avg(sal)
+  from t1
+  group by grouping sets((deptno, job, gender), (job, gender), (deptno), ());
+
+# Composite columns
+
+  select deptno, job, gender, count(*)
+  from t1
+  group by rollup(deptno, (job, gender));
+
+  select deptno, job, gender, count(*)
+  from t1
+  group by rollup((deptno, job, gender));
+
+# Concatenated Grouping
+
+  group by a, rollup(b), cube(c)
+
+           a         b        c     -> a, b, c
+                     ()       ()    -> a, b
+                                    -> a, c
+                                    -> a
+
+  group by grouping sets((a, b, c), (a, b), (a, c), (a))
+
+
+  >> http://docs.oracle.com/cd/E11882_01/server.112/e25554/aggreg.htm#i1007098
+
+     GROUP BY ROLLUP(calendar_year, calendar_quarter_desc, calendar_month_desc),
+              ROLLUP(country_region, country_subregion, countries.country_iso_code,cust_state_province, cust_city),
+              ROLLUP(prod_category_desc, prod_subcategory_desc, prod_name);
+
+     GROUP BY grouping sets ((calendar_year, calendar_quarter_desc, calendar_month_desc,... ),
+                              (),
+                              (), ...)
+
+=====================================
+ SQL for Analysis and Reporting
+=====================================
+
+  Analytic_Function.txt
+
+======================
+ SQL for Modeling
+======================
+
+  SQL_Model.txt
+
+======================
+ Hierarchical Queries
+======================
+
+# SQL 작성 및 해석 권장 순서
+
+  from        -- 1
+  where       -- 4
+  start with  -- 2
+  connect by  -- 3
+
+# Top-down
+
+  select level, e.*
+  from emp e
+  start with empno = 7839
+  connect by PRIOR empno = mgr;
+
+  col emp_no format a20
+  col empno noprint
+
+  select level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  start with empno = 7839
+  connect by PRIOR empno = mgr;
+
+  select level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  where level in (1, 2)
+  start with empno = 7839
+  connect by PRIOR empno = mgr;
+
+# Bottom-up
+ 
+  select level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  start with empno = 7369
+  connect by empno = PRIOR mgr;
+
+# Banch 자르기 vs Node 자르기
+
+  select /* Node 자르기 */
+         level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  where empno <> 7698
+  start with empno = 7839
+  connect by PRIOR empno = mgr;
+
+  select /* Banch 자르기 */
+         level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  start with empno = 7839
+  connect by PRIOR empno = mgr and empno <> 7698;
+
+# 정렬
+
+  select level, lpad(empno, level*4, ' ') as emp_no, e.*
+  from emp e
+  start with empno = 7839
+  connect by PRIOR empno = mgr
+  order SIBLINGS by sal desc;
+
+# sys_connect_by_path 함수
+
+  col path format a50
+
+  select level, lpad(empno, level*4, ' ') as emp_no, sys_connect_by_path(ename, '/') as path
+  from emp e
+  start with empno = 7839
+  connect by PRIOR empno = mgr
+  order SIBLINGS by sal desc;
+
+==========================================
+ 오라클 실습 (전문가로 가는 지름길) 
+==========================================
+
+  http://blog.daum.net/why_i_am/45
+
+
+# 4-33 Merge
+
+  drop table t1 purge;
+  drop table t2 purge;
+  
+  create table t1
+  as 
+  select empno, ename, job, sal
+  from emp
+  where rownum <= 10;
+
+  create table t2
+  as 
+  select empno, ename, job, sal*1.2 as sal
+  from emp;
+
+  prompt Before Merge
+  select * from t1;
+
+  MERGE INTO t1 a
+  USING      t2 b
+  ON (a.empno = b.empno)
+  WHEN MATCHED THEN
+    UPDATE
+    SET a.sal = b.sal        
+  WHEN NOT MATCHED THEN
+    INSERT (a.empno, a.ename, a.job, a.sal)
+    VALUES (b.empno, b.ename, b.job, b.sal);
+
+  prompt After Merge
+  select * from t1;
+
+===================================
+ Data를 연결하는 방법 4가지
+===================================
+
+  drop table t1 purge;
+  drop table t2 purge;
+
+  create table t1
+  as
+  select empno, ename
+  from emp;
+ 
+  create table t2
+  as
+  select empno, job
+  from emp;
+
+  (1) 조인
+
+      select t1.empno, t1.ename, t2.job
+      from t1, t2
+      where t1.empno = t2.empno
+      order by 1;
+
+  (2) Set 연산자
+
+      select empno, ename, ''
+      from t1
+      union all
+      select empno, '', job
+      from t2
+      order by 1, 2;
+
+      select empno, max(ename) ename, max(job) job
+      from (select empno, ename, '' as job
+            from t1
+            union all
+            select empno, '', job
+            from t2)
+      group by empno
+      order by empno;
+
+  (3) 서브쿼리
+
+      select empno, ename, (select job from t2 where empno = t1.empno) as job
+      from t1;
+
+  (4) 사용자 정의 함수
+ 
+      create or replace function uf_t2_job
+        (a t1.empno%type)
+         return t2.job%type
+      is
+        v_job t2.job%type;
+      begin
+        select job into v_job
+        from t2
+        where empno = a;
+
+        return v_job;
+      end;
+      /
+
+      col job format a10
+
+      select empno, ename, uf_t2_job(empno) as job
+      from t1;
+
+
+
+
+
+
+
+
+
+
+

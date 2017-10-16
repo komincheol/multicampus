@@ -1,0 +1,101 @@
+================
+ 문제 
+================
+
+1) Server Tuning과 SQL Tuning에 관해 기술하시오.
+
+2) AWR, MMON, ADDM에 관해 기술하고 ADDM 보고서를 생성해서 제출하시오.
+
+3) 다음 작업과 관련된 trace 파일을 생성하고 tkprof를 수행한 결과를 제출하시오.
+    1. 인덱스가 사용되지 않은 문장
+    2. 인덱스가 사용된 문장
+    3. Query Transformation이 수행된 문장
+
+===================
+ 3) 모범답안
+===================
+
+~ 3-1, 3-2 
+
+  [orcl:~]$ . oraenv
+  ORACLE_SID = [orcl] ? orcl
+  The Oracle base for ORACLE_HOME=/u01/app/oracle/product/11.2.0/dbhome_1 is /u01/app/oracle
+
+  [orcl:~]$ sqlplus / as sysdba
+
+  SQL> startup force
+
+  SQL> conn system/oracle_4U
+
+  SQL> show parameter user_dump_dest
+
+  NAME                                 TYPE        VALUE
+  ------------------------------------ ----------- ------------------------------------------------
+  user_dump_dest                       string      /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+
+  SQL> alter session set tracefile_identifier = mytrc;
+
+  SQL> ALTER SESSION SET EVENTS '10046 trace name context forever, level 12';
+
+  SQL> select * 
+       from scott.emp;
+
+  SQL> select * 
+       from scott.emp
+       where empno = 7788;
+
+  SQL> ALTER SESSION SET EVENTS '10046 trace name context off';
+
+  SQL> !ls /u01/app/oracle/diag/rdbms/orcl/orcl/trace/*MYTRC*;
+
+  SQL> exit
+
+  [orcl:~]$ cd /u01/app/oracle/diag/rdbms/orcl/orcl/trace
+
+  [orcl:trace]$ ls *MYTRC*
+  orcl_ora_각자다름_MYTRC.trc
+
+  [orcl:trace]$ more *MYTRC.trc
+
+  [orcl:trace]$ tkprof *MYTRC.trc a.txt sys=no
+
+  [orcl:trace]$ vi a.txt
+
+  orcl_ora_23916_MYTRC.trc
+
+~ 3-2 
+
+  [orcl:trace]$ sqlplus system/oracle_4U
+
+  SQL> alter session set tracefile_identifier = 10053;
+
+  SQL> ALTER SESSION SET EVENTS '10053 trace name context forever, level 1';
+
+
+  SQL> select * 
+       from scott.emp
+       where sal > (select avg(sal)
+                    from scott.emp);
+
+  SQL> ALTER SESSION SET EVENTS '10053 trace name context off';
+
+  SQL> !ls /u01/app/oracle/diag/rdbms/orcl/orcl/trace/*10053.trc;
+
+  SQL> exit
+
+  [orcl:trace]$ vi *10053.trc
+
+  orcl_ora_23916_10053.trc
+
+
+
+
+
+
+
+
+
+
+
+
+

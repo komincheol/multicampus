@@ -1,0 +1,357 @@
+==============================
+ SQL Model 
+==============================
+
+  - http://docs.oracle.com/cd/E11882_01/server.112/e25554/sqlmodel.htm
+
+  - http://rwijk.blogspot.com/2007/10/sql-model-clause-tutorial-part-one.html
+  - http://rwijk.blogspot.com/2007/10/sql-model-clause-tutorial-part-two.html
+  - http://rwijk.blogspot.com/2009/01/sql-model-clause-tutorial-part-three.html
+  - http://rwijk.blogspot.com/2009/03/calculating-probabilities-with-n-throws.html
+  - http://rwijk.blogspot.com/2009/03/choosing-between-sql-and-plsql.html
+ 
+ [1-1] Sample Data 준비 : Oracle XE를 사용할 경우
+
+  C:\Users\student> notepad a.txt
+
+country,prod,year,sales
+Italy,Bounce,1999,2474.78
+Italy,Bounce,2000,4333.69
+Italy,Bounce,2001,4846.3
+Italy,Y Box,1999,15215.16
+Italy,Y Box,2000,29322.89
+Italy,Y Box,2001,81207.55
+Japan,Bounce,1999,2961.3
+Japan,Bounce,2000,5133.53
+Japan,Bounce,2001,6303.6
+Japan,Y Box,1999,22161.91
+Japan,Y Box,2000,45690.66
+Japan,Y Box,2001,89634.83
+
+  C:\Users\student> ic
+
+  SQL> drop table sales_view purge;
+
+  SQL> create table sales_view
+       (country varchar2(10),
+        prod    varchar2(30),
+        year    number(4),
+        sales   number(10,2));
+
+  SQL> host notepad a.ctl
+
+    LOAD DATA
+    INFILE 'a.txt'
+    INTO TABLE sales_view
+    FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"'
+    (country,prod,year,sales)
+
+  SQL> exit
+
+  C:\Users\student> exit
+
+  >> 새로운 명령 프롬프트 창을 여세요
+
+  C:\Users\student> sqlldr dream30/catcher control=a.ctl skip=1
+
+  C:\Users\student> ic
+
+  SQL> select * from sales_view;
+
+ [2] 첫번째 Model 구문 예제
+
+  col country format a20
+  col prod    format a20
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+  and prod in ('Bounce', 'Y Box', '2_Products')
+  order by country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+    MODEL RETURN UPDATED ROWS        -- (1)
+    PARTITION BY (country)           -- (2)
+    DIMENSION BY (prod, year)        -- (3)
+    MEASURES (sales)                 -- (4)
+    RULES                            -- (5)
+        (sales['Bounce', 2002]     = sales['Bounce', 2001] + sales['Bounce', 2000])
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+  and prod in ('Bounce')
+    MODEL 
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES
+          (sales['Bounce', 2002]     = sales['Bounce', 2001] + sales['Bounce', 2000])
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES
+          (sales['Bounce', 2002]     = sales['Bounce', 2001] + sales['Bounce', 2000],
+           sales['Y Box', 2002]      = sales['Y Box', 2001])
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES
+          (sales['Bounce', 2002]     = sales['Bounce', 2001] + sales['Bounce', 2000],
+           sales['Y Box', 2002]      = sales['Y Box', 2001],
+           sales['2_Products', 2002] = sales['Bounce', 2002] + sales['Y Box', 2002])
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, s
+  FROM sales_view
+  WHERE country IN ('Italy','Japan')
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales s)           -- (1) alias 사용    
+    RULES (s['Bounce', 2002]     = s['Bounce', 2001] + s['Bounce', 2000],
+           s['Y Box', 2002]      = s['Y Box', 2001],
+           s['2_Products', 2002] = s['Bounce', 2002] + s['Y Box', 2002])
+  ORDER BY country, prod, year;
+
+  ## 임의의 테이블을 생성해서 연습
+
+  drop table t1 purge;
+
+  create table t1
+  as
+  select deptno,
+         rank, 
+         decode(rank, 1, 'A', 2, 'B', 3, 'C') as gubun, 
+         sal
+  from (select deptno, empno, ename, sal,
+               row_number() over 
+               (partition by deptno order by sal desc) as rank
+        from emp)
+  where rank <= 3;
+
+  select *
+  from t1
+    MODEL
+    PARTITION BY (deptno)
+    DIMENSION BY (rank, gubun)
+    MEASURES (sal)          
+    RULES (sal[4, 'D'] = sal[1, 'A'] + sal[3, 'C'])
+  ORDER BY deptno, rank, gubun, sal;
+
+  select *
+  from t1
+    MODEL
+    PARTITION BY (deptno)
+    DIMENSION BY (rank, gubun)
+    MEASURES (sal)          
+    RULES (
+           sal[4, 'A'] = sal[1, 'A'],
+           sal[4, 'B'] = sal[1, 'A'] + sal[3, 'C'],
+           sal[4, 'C'] = sal[3, 'C'],
+           sal[4, 'D'] = sal[1, 'A'] + sal[3, 'C'])
+  ORDER BY deptno, rank, gubun, sal;
+
+
+ [3] 셀(cell)과 값(value) 참조 방식 : Positional Cell Reference - 단일 셀에 대한 접근 및 업데이트
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country = 'Italy'
+  and year = 2000
+  and prod = 'Bounce'
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, s as sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales s)
+    RULES (s['Bounce', 2000] = 10)    --> 셀이 참조하는 값과 디멘젼을 대응시키는 방식
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country = 'Italy'
+  and year = 2005
+  and prod = 'Bounce'
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, s as sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales s)
+    RULES (s['Bounce', 2005] = 20)    --> 셀이 참조하는 값과 디멘젼을 대응시키는 방식
+  ORDER BY country, prod, year;
+
+
+ [4] 셀(cell)과 값(value) 참조 방식 : Symbolic Cell Reference: 다수의 셀에 대한 접근 및 업데이트
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+  and prod='Bounce'
+  and year>=1998
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES (sales[prod='Bounce', year>=1998] = 10 )   --> 표준 SQL 조건문을 이용하여 포뮬러 생성하는 방식. >, <, In, Between 등의 사용이 가능합니다.
+                                                     --> 기존 셀을 업데이트하는 용도로만 사용됩니다. 새로운 셀을 생성하는 것은 불가능합니다.
+  ORDER BY country, prod, year;
+
+
+ [5] 셀(cell)과 값(value) 참조 방식 : 단일 쿼리를 위한 Positional/Symbolic Cell Reference
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view 
+  WHERE country IN ('Italy','Japan')
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES (sales['Bounce', 2002]     = sales['Bounce', year = 2001]   ,                -- positional notation : can insert new cell
+           sales['Y Box', year>2000] = sales['Y Box', 1999],                           -- symbolic notation   : can update existing cell
+           sales['2_Products', 2005] = sales['Bounce', 2001] + sales['Y Box', 2000] )  -- positional notation : permits creation of new cell for new product
+  ORDER BY country, prod, year;
+
+
+ [6] 셀(cell)과 값(value) 참조 방식 : 포뮬러의 우측 항에 Multi-Cell Reference 적용하기
+
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+  and prod = 'Bounce'
+  and year BETWEEN 1998 AND 2002;
+
+  SELECT max(sales)
+  FROM sales_view
+  WHERE country='Italy'
+  and prod = 'Bounce'
+  and year BETWEEN 1998 AND 2002;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+  and prod = 'Bounce'
+  and year BETWEEN 1998 AND 2002
+    MODEL
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales sales)
+    RULES (sales['Bounce', 2005] = 100 + MAX(sales)['Bounce', year BETWEEN 1998 AND 2002])   --> aggregate 함수는 포뮬러의 우측 항에만 적용할 수 있습니다.
+  ORDER BY country, prod, year;
+
+
+ [7] 셀(cell)과 값(value) 참조 방식 : CV() 함수 : 우측 항 계산을 위해 좌측 항의 값 이용하기
+
+  * CV : Current value of dimension in Model clause
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales sales)
+    RULES (sales['Bounce', year BETWEEN 1995 AND 2002] = sales['Mouse Pad', CV(year)] + 0.2 * sales['Y Box', CV(year)])
+  ORDER BY country, prod, year;
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales sales)
+    RULES (sales['Bounce', year BETWEEN 1995 AND 2002] = sales['Mouse Pad', year BETWEEN 1995 AND 2002] + 0.2 * sales['Y Box',year BETWEEN 1995 AND 2002])
+  ORDER BY country, prod, year;
+
+    --> ORA-32622: 잘못된 다중 셀 참조 : 에러 확인해 보세요.
+
+  * 로우간 계산(inter-row calculation)을 위한 CV()의 활용
+
+  SELECT  --> Bounce, Y Box, Mouse Pad 제품의 연 단위 매출 성장률
+    SUBSTR(country,1,10) country, SUBSTR(prod,1,10) prod, year, sales, growth_pct
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales, 0 growth_pct)
+    RULES (growth_pct[prod IN ('Bounce','Y Box','Mouse Pad'), year BETWEEN 1998 and 2001] = 100 * ( sales[CV(prod), CV(year)] - sales[CV(prod), CV(year) -1] )
+                                                                                                  / sales[CV(prod), CV(year) -1] )
+  ORDER BY country, prod, year;
+
+  * ANY 키워드를 사용한 와일드 카드 조건 적용 : Positional/Symbolic 모두 새로운 셀 insert가 불가능해집니다.
+
+  select distinct year from sales_view;
+
+  SELECT SUBSTR(country,1,10) country, SUBSTR(prod,1,10) prod, year, sales, growth_pct
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales, 0 growth_pct)
+    RULES (growth_pct[prod IN ('Bounce','Y Box','Mouse Pad'), ANY] = 100* ( sales[CV(prod), CV(year)] - sales[CV(prod), CV(year) -1])
+                                                                            / sales[CV(prod), CV(year) -1] )
+  ORDER BY country, prod, year;
+
+
+ [8] FOR 루프의 활용  
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES (sales['Mouse Pad', 2005] = 1.3 * sales[CV(prod), 2001],
+           sales['Bounce',    2005] = 1.3 * sales[CV(prod), 2001],
+           sales['Y Box',     2005] = 1.3 * sales[CV(prod), 2001]
+           )
+  ORDER BY country, prod, year;
+
+     ↓↓
+
+  for 루프 활용 : 좌측항에만 적용이 가능합니다.
+
+  SELECT SUBSTR(country,1,20) country, SUBSTR(prod,1,15) prod, year, sales
+  FROM sales_view
+  WHERE country='Italy'
+    MODEL RETURN UPDATED ROWS
+    PARTITION BY (country)
+    DIMENSION BY (prod, year)
+    MEASURES (sales)
+    RULES (sales[FOR prod IN ('Mouse Pad', 'Bounce', 'Y Box'), 2005] = 1.3 * sales[CV(prod), 2001])
+  ORDER BY country, prod, year;
+
+
